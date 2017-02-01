@@ -1,0 +1,35 @@
+{
+  "name": "awesome_cart_js",
+  "version": "1.0.0",
+  "description": "A javascript shopping cart frontend.",
+  "main": "src/main.js",
+  "scripts": {
+    "docs-html": "documentation build src/main.js -f html -o docs",
+    "docs-readme": "documentation readme src/main.js --section=API",
+    "dist": "npm run dist-bundle && npm run dist-sa && npm run docs-html && npm run docs-readme",
+    "dist-bundle": "browserify src/main.js -o dist/awc.bundle.js -d -t [ babelify --presets [ es2015 react ] ]",
+    "watch-bundle": "watchify src/main.js -o dist/awc.bundle.js -d -t [ babelify --presets [ es2015 react ] ]",
+    "dist-sa": "browserify src/main.js -o dist/awc.standalone.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc",
+    "watch-sa": "watchify src/main.js -o dist/awc.standalone.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DigiThinkIT/AwesomeCartJS.git"
+  },
+  "keywords": [
+    "js",
+    "ecommerce"
+  ],
+  "author": "forellana@digithinkit.com",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/DigiThinkIT/AwesomeCartJS/issues"
+  },
+  "homepage": "https://github.com/DigiThinkIT/AwesomeCartJS#readme",
+  "devDependencies": {
+    "babel-preset-es2015": "^6.22.0",
+    "babel-preset-react": "^6.22.0",
+    "babelify": "^7.3.0"
+  }
+}
