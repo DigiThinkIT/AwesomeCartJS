@@ -10,19 +10,19 @@ products listing.
 
 So, somewhere in your page add an empty element and give it an ID:
 
-~~~~html
+```html
 <div id="products"></div>
-~~~~
+```
 
 Next include the library close to the bottom of your page:
 
-~~~~html
+```html
 <script src="js/awc.standalone.js" type="text/javascript"></script>
-~~~~
+```
 
 Finally define the product feed and bootstrap the cart.
 
-~~~~html
+```html
 <script type="text/javascript">
 
   // create a cart instance
@@ -39,7 +39,7 @@ Finally define the product feed and bootstrap the cart.
   // kickoff the cart logic
   cart.bootstrap()
 </script>
-~~~~
+```
 
 ### Product Templates
 
@@ -49,7 +49,7 @@ template to use when a product feed is being refreshed.
 
 As of this time the template context is the same object as received from the store adapter:
 
-~~~~json
+```json
 {
   "sku": "Product SKU",
   "name": "Product Name",
@@ -57,7 +57,7 @@ As of this time the template context is the same object as received from the sto
   "price": 100,
   "tags": ["tag1", "tag2", "etc..."]
 }
-~~~~
+```
 
 ### adapters
 
@@ -94,6 +94,20 @@ ProductFeed manages updating product listing elements on the live webpage.
 **Extends EventEmitter**
 
 The main cart class. All managing of shopping cart happens here.
+
+#### newProductFeed
+
+Adds a new managed product feed. Product feeds automate fetching and displaying
+product listings.
+
+**Parameters**
+
+-   `name`  string     The feed name.
+-   `options`  object  An object defining the feed properties and behaviour.
+
+#### updateUI
+
+Updates click event references and overall UI handling
 
 #### addToCart
 
