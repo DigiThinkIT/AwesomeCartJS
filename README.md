@@ -89,6 +89,31 @@ A demo store adapter with hardcoded products to demonstrate how adapters work.
 
 ProductFeed manages updating product listing elements on the live webpage.
 
+#### constructor
+
+Instantiates a product feed
+
+**Parameters**
+
+-   `cart`  string     The AwesomeCart instance
+-   `name`  string     The feed name
+-   `options`  object  Feed options
+
+#### filters
+
+Array, gets the active filters for this feed.
+
+Returns **any** Array
+
+#### filters
+
+Sets the active filters for this feed. The feed is immediately
+refreshed with this property is changed.
+
+**Parameters**
+
+-   `filters`  Array
+
 ### AwesomeCart
 
 **Extends EventEmitter**

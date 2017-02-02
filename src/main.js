@@ -80,6 +80,13 @@ class DemoStoreaAdapter extends StoreAdapter {
  * ProductFeed manages updating product listing elements on the live webpage.
  */
 class ProductFeed extends EventEmitter {
+
+  /**
+   * Instantiates a product feed
+   * @arg cart string     The AwesomeCart instance
+   * @arg name string     The feed name
+   * @arg options object  Feed options
+   */
   constructor() {
     super();
     [this.cart, this.name, this.options] = optionals(arguments, undefined, undefined, {})
@@ -87,6 +94,9 @@ class ProductFeed extends EventEmitter {
     this.options = merge({
       filters: []
     }, this.options)
+
+    required(this.cart, 'ProductFeed requires a cart instance')
+    required(this.name, 'ProductFeed requires a name')
 
     if ( this.cart === undefined ) {
       throw new Error('ProductFeed requires a cart instance')
@@ -123,12 +133,21 @@ class ProductFeed extends EventEmitter {
     this.refresh()
   }
 
+  /**
+   * Array, gets the active filters for this feed.
+   * @return Array
+   */
   get filters() {
     return this.options.filters;
   }
 
+  /**
+   * Sets the active filters for this feed. The feed is immediately
+   * refreshed with this property is changed.
+   * @arg filters Array
+   */
   set filters(filters) {
-    this.options.filters = filters;
+    this.options.filters = filters || [];
     this.refresh()
   }
 
@@ -139,6 +158,7 @@ class ProductFeed extends EventEmitter {
       .fetchProducts(this.filters)
       .then((result) => {
         if ( this.options.product_template.isFulfilled() ) {
+          // if template is ready just pass along results
           return result;
         } else {
           // wait for template to load
@@ -153,11 +173,13 @@ class ProductFeed extends EventEmitter {
 
         this.products = {}
         this.empty()
+
+        var tpl = this.options.product_template.value();
         result.every((p) => {
           p.addToCartBtn = this.options.cart.btnAddToCart(p)
           this.products[p.sku] = p;
 
-          var product_html = this.options.product_template.value()(p)
+          var product_html = tpl(p)
           this.emit('product-loaded', this, p, product_html)
           this.container.insertAdjacentHTML('beforeend', product_html)
           this.emit('product-added', this, p)
@@ -265,6 +287,7 @@ module.exports = {
   StoreAdapter: StoreAdapter,
   getTemplate: function(url) {
     return xhr.get(url).then((resp) => {
+      // compile template and return
       return Handlebars.compile(resp.body)
     })
   }
