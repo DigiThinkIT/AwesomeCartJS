@@ -1,0 +1,15 @@
+.product {
+  margin: .5em;
+  border-bottom: 1px solid #888;
+  overflow: auto;
+  clear: both;
+}
+
+.product-image {
+  float: left;
+  margin: 0 1em .5em 0;
+}
+
+.product button {
+  float: right;
+}

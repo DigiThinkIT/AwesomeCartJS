@@ -39,6 +39,7 @@ class DemoStoreaAdapter extends StoreAdapter {
       {
         sku: "sku001",
         name: "Demo Item1",
+        imageUrl: "https://placeholdit.imgix.net/~text?txtsize=33&txt=200%C3%97150&w=200&h=150",
         description: 'First demo item',
         price: 10,
         tags: ['demo', 'first']
@@ -46,6 +47,7 @@ class DemoStoreaAdapter extends StoreAdapter {
       {
         sku: "sku001",
         name: "Demo Item2",
+        imageUrl: "https://placeholdit.imgix.net/~text?txtsize=33&txt=200%C3%97150&w=200&h=150",
         description: 'Second demo item',
         price: 20,
         tags: ['demo']
