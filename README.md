@@ -5,18 +5,59 @@ The goal of Awc is to quickly deploy a shopping cart front end with little to no
 
 ### Getting Started
 
-First include the library as follows:
+Awc requires at least one empty element in your page which it will use to feed
+products listing.
+
+So, somewhere in your page add an empty element and give it an ID:
+
+~~~~
+  <div id="products"></div>
+~~~~
+
+Next include the library close to the bottom of your page:
 
 ~~~~
   <script src="js/awc.standalone.js" type="text/javascript"></script>
+~~~~
+
+Finally define the product feed and bootstrap the cart.
+
+~~~~
   <script type="text/javascript">
-  var cart = new awc.AwesomeCart({
-    storeAdapter: <your favorite store adapter instance here>
+
+  // create a cart instance
+  var cart = new awc.AwesomeCart()
+
+  // A product feed is an automated way of fetching product listings from a
+  // previously defined data store. The default data store is the included
+  // DemoStoreaAdapter class
+  cart.newProductFeed('products', {
+    container: '#products',
+    product_template: awc.getTemplate('product_template.html') // define a handlebars template location
   })
+
+  // kickoff the cart logic
+  cart.bootstrap()
   </script>
 ~~~~
 
-TODO: explain product templating and product listing.
+### Product Templates
+
+AWC uses the handlebars templating library to ease building of product listings.
+You can simply reference a template using awc.getTemplate() function to define what
+template to use when a product feed is being refreshed.
+
+As of this time the template context is the same object as received from the store adapter:
+
+~~~~
+{
+  sku: "Product SKU",
+  name: "Product Name",
+  description: "Product Description",
+  price: 100,
+  tags: ['tag1', 'tag2', 'etc...']
+}
+~~~~
 
 ### adapters
 
