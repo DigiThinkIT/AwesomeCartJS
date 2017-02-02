@@ -10,19 +10,19 @@ products listing.
 
 So, somewhere in your page add an empty element and give it an ID:
 
-~~~~
+~~~~html
 <div id="products"></div>
 ~~~~
 
 Next include the library close to the bottom of your page:
 
-~~~~
+~~~~html
 <script src="js/awc.standalone.js" type="text/javascript"></script>
 ~~~~
 
 Finally define the product feed and bootstrap the cart.
 
-~~~~
+~~~~html
 <script type="text/javascript">
 
   // create a cart instance
@@ -49,13 +49,13 @@ template to use when a product feed is being refreshed.
 
 As of this time the template context is the same object as received from the store adapter:
 
-~~~~
+~~~~json
 {
-  sku: "Product SKU",
-  name: "Product Name",
-  description: "Product Description",
-  price: 100,
-  tags: ['tag1', 'tag2', 'etc...']
+  "sku": "Product SKU",
+  "name": "Product Name",
+  "description": "Product Description",
+  "price": 100,
+  "tags": ["tag1", "tag2", "etc..."]
 }
 ~~~~
 

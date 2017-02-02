@@ -196,11 +196,20 @@ class AwesomeCart extends EventEmitter {
     return `<button data-awc-addtocart data-sku="${product.sku}">Add To Cart</button>`
   }
 
+  /**
+   * Adds a new managed product feed. Product feeds automate fetching and displaying
+   * product listings.
+   * @arg name string     The feed name.
+   * @arg options object  An object defining the feed properties and behaviour.
+   */
   newProductFeed(name, options) {
     this.options.feeds[name] = new ProductFeed(this, name, options)
     this.options.feeds[name].on('refreshed', this.updateUI.bind(this))
   }
 
+  /**
+   * Updates click event references and overall UI handling
+   */
   updateUI() {
     var addtocartElems = document.querySelectorAll('[data-awc-addtocart]');
     for(var i = 0; i < addtocartElems.length; i++) {
