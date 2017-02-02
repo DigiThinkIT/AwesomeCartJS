@@ -7,12 +7,14 @@ The goal of Awc is to quickly deploy a shopping cart front end with little to no
 
 First include the library as follows:
 
-> <script src="js/awc.standalone.js" type="text/javascript"></script>
-> <script type="text/javascript">
->   var cart = new awc.AwesomeCart({
->     storeAdapter: <your favorite store adapter instance here>
->   })
-> </script>
+~~~~
+  <script src="js/awc.standalone.js" type="text/javascript"></script>
+  <script type="text/javascript">
+  var cart = new awc.AwesomeCart({
+    storeAdapter: <your favorite store adapter instance here>
+  })
+  </script>
+~~~~
 
 TODO: explain product templating and product listing.
 
