@@ -11,19 +11,19 @@ products listing.
 So, somewhere in your page add an empty element and give it an ID:
 
 ~~~~
-  <div id="products"></div>
+<div id="products"></div>
 ~~~~
 
 Next include the library close to the bottom of your page:
 
 ~~~~
-  <script src="js/awc.standalone.js" type="text/javascript"></script>
+<script src="js/awc.standalone.js" type="text/javascript"></script>
 ~~~~
 
 Finally define the product feed and bootstrap the cart.
 
 ~~~~
-  <script type="text/javascript">
+<script type="text/javascript">
 
   // create a cart instance
   var cart = new awc.AwesomeCart()
@@ -38,7 +38,7 @@ Finally define the product feed and bootstrap the cart.
 
   // kickoff the cart logic
   cart.bootstrap()
-  </script>
+</script>
 ~~~~
 
 ### Product Templates
