@@ -95,9 +95,6 @@ class ProductFeed extends EventEmitter {
       filters: []
     }, this.options)
 
-    required(this.cart, 'ProductFeed requires a cart instance')
-    required(this.name, 'ProductFeed requires a name')
-
     if ( this.cart === undefined ) {
       throw new Error('ProductFeed requires a cart instance')
     }
