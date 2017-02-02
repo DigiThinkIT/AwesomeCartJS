@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+<head>
+  <title>Awesome Cart JS Demo</title>
+</head>
+<body>
+  <div id="products">
+  </div>
+  <script type="text/javascript" src="dist/awc.standalone.js"></script>
+  <script type="text/javascript">
+  var cart = new awc.AwesomeCart();
+  cart.newProductFeed('products', {
+    cart: cart,
+    container: '#products',
+    product_template: awc.getTemplate('product_template.html')
+  })
+  cart.bootstrap()
+  </script>
+</body>
+</html>

@@ -3,9 +3,13 @@
  * @module awc
  */
 
-var {log, error} = require('./debug');
-var {optionals, requiredOptions, merge} = require('./utils');
-var EventEmitter = require('events').EventEmitter;
+const {log, error} = require('./debug');
+const {optionals, requiredOptions, merge} = require('./utils');
+const EventEmitter = require('events').EventEmitter;
+const xhr = require('xhr')
+const Promise = require('BlueBird')
+const Handlebars = require('handlebars')
+xhr.get = Promise.promisify(xhr.get)
 
 /**
  * The base store adapter class. All adapters are required to extend from this class.
@@ -21,11 +25,7 @@ class StoreAdapter extends EventEmitter {
 
   formatCurrency(currency) { return null; }
 
-  searchProduct(term) { return null; }
-
-  fetchProductSKUs() { return null; }
-
-  fetchProductDetail(sku) { return null; }
+  fetchProducts() { return null; }
 
 }
 
@@ -35,12 +35,22 @@ class StoreAdapter extends EventEmitter {
 class DemoStoreaAdapter extends StoreAdapter {
   constructor() {
     super()
-    this._products = {
-      "sku001": {
+    this._products = [
+      {
+        sku: "sku001",
         name: "Demo Item1",
-        price: 10
+        description: 'First demo item',
+        price: 10,
+        tags: ['demo', 'first']
+      },
+      {
+        sku: "sku001",
+        name: "Demo Item2",
+        description: 'Second demo item',
+        price: 20,
+        tags: ['demo']
       }
-    }
+    ]
   }
 
   getCurrency() { return "USD"; }
@@ -49,9 +59,10 @@ class DemoStoreaAdapter extends StoreAdapter {
 
   formatCurrency(currency, decimals) { return `$${currency.toFixed(decimals)}`; }
 
-  searchProduct(term) { return null; }
+  fetchProducts() {
+    var tags, terms;
+    [tags, terms] = optionals(arguments, [])
 
-  fetchProducts(tags) {
     return new Promise((function(resolve, reject) {
       var products = [];
       for(var i in this._products) {
@@ -63,8 +74,6 @@ class DemoStoreaAdapter extends StoreAdapter {
       resolve(products);
     }).bind(this));
   }
-
-  fetchProductDetail(sku) { return null; }
 }
 
 /**
@@ -73,11 +82,15 @@ class DemoStoreaAdapter extends StoreAdapter {
 class ProductFeed extends EventEmitter {
   constructor() {
     super();
-    var args = optionals(arguments, undefined, {})
-    this.name = args[0];
+    [this.cart, this.name, this.options] = optionals(arguments, undefined, undefined, {})
+
     this.options = merge({
       filters: []
-    }, args[1])
+    }, this.options)
+
+    if ( this.cart === undefined ) {
+      throw new Error('ProductFeed requires a cart instance')
+    }
 
     if ( this.name === undefined ) {
       throw new Error('ProductFeed requires a name')
@@ -92,6 +105,71 @@ class ProductFeed extends EventEmitter {
       throw error;
     }
 
+    this.cart.on('init', this._init.bind(this))
+  }
+
+  get container() {
+    return document.querySelector(this.options.container)
+  }
+
+  empty() {
+    var container = this.container;
+    while(container.hasChildNodes()) {
+      container.removeChild(container.lastChild);
+    }
+  }
+
+  _init() {
+    this.refresh()
+  }
+
+  get filters() {
+    return this.options.filters;
+  }
+
+  set filters(filters) {
+    this.options.filters = filters;
+    this.refresh()
+  }
+
+  refresh() {
+    this.emit('refresh', this)
+
+    this.cart.storeAdapter
+      .fetchProducts(this.filters)
+      .then((result) => {
+        if ( this.options.product_template.isFulfilled() ) {
+          return result;
+        } else {
+          // wait for template to load
+          return new Promise((resolve, reject) => {
+            this.options.product_template
+              .then(() => { resolve(result) })
+              .catch((err) => { reject(err) })
+          })
+        }
+      })
+      .then((result) => {
+
+        this.products = {}
+        this.empty()
+        result.every((p) => {
+          p.addToCartBtn = this.options.cart.btnAddToCart(p)
+          this.products[p.sku] = p;
+
+          var product_html = this.options.product_template.value()(p)
+          this.emit('product-loaded', this, p, product_html)
+          this.container.insertAdjacentHTML('beforeend', product_html)
+          this.emit('product-added', this, p)
+          return p;
+        })
+
+        this.emit('refreshed', this, this.products)
+      })
+      .catch((err) => {
+        console.error(err)
+        //TODO: Handle errors
+      });
   }
 }
 
@@ -101,23 +179,44 @@ class ProductFeed extends EventEmitter {
 class AwesomeCart extends EventEmitter {
   constructor() {
     super()
-    var args = optionals(arguments, {});
-    var options = args[0]
+    var options;
+    [options] = optionals(arguments, {});
 
     this.options = merge({
       storeAdapter: module.exports.default_store_adapter || new DemoStoreaAdapter(),
-      currency_decimals: 2
+      currency_decimals: 2,
+      feeds: {}
     }, options);
     this.cart = [];
 
     this.storeAdapter = this.options.storeAdapter;
   }
 
-  defineFeed(name, options) {
-    this.options.feeds[name] = options;
+  btnAddToCart(product) {
+    return `<button data-awc-addtocart data-sku="${product.sku}">Add To Cart</button>`
+  }
+
+  newProductFeed(name, options) {
+    this.options.feeds[name] = new ProductFeed(this, name, options)
+    this.options.feeds[name].on('refreshed', this.updateUI.bind(this))
+  }
+
+  updateUI() {
+    var addtocartElems = document.querySelectorAll('[data-awc-addtocart]');
+    for(var i = 0; i < addtocartElems.length; i++) {
+      var btn = addtocartElems[i];
+      btn.addEventListener('click', this._onAddToCartClick.bind(this))
+    }
+  }
+
+  _onAddToCartClick(e) {
+    console.log('Add to cart', e, this)
   }
 
   listProducts() {
+    var filters;
+    [filters] = optionals(arguments, [])
+
     return new Promise(function(resolve, reject) {
 
     });
@@ -145,10 +244,19 @@ class AwesomeCart extends EventEmitter {
     });
   }
 
+  bootstrap() {
+    this.emit('init')
+  }
+
 }
 
 module.exports = {
   AwesomeCart: AwesomeCart,
   DemoStoreaAdapter: DemoStoreaAdapter,
-  StoreAdapter: StoreAdapter
+  StoreAdapter: StoreAdapter,
+  getTemplate: function(url) {
+    return xhr.get(url).then((resp) => {
+      return Handlebars.compile(resp.body)
+    })
+  }
 }

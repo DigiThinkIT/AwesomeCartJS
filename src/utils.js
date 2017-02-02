@@ -9,7 +9,7 @@ module.exports = {
     var ops = Array.from(arguments).splice(1);
     var ret = [];
     for(var i = 0; i < ops.length; i++ ) {
-      ret.push((args.length <= i)?args[i]:ops[i]);
+      ret.push((i < args.length)?args[i]:ops[i]);
     }
     return ret;
   },
