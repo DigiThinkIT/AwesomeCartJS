@@ -83,9 +83,24 @@ The base store adapter class. All adapters are required to extend from this clas
 
 A demo store adapter with hardcoded products to demonstrate how adapters work.
 
+### filters
+
+Array, gets the active filters for this feed.
+
+Returns **any** Array
+
+### filters
+
+Sets the active filters for this feed. The feed is immediately
+refreshed with this property is changed.
+
+**Parameters**
+
+-   `filters`  Array
+
 ### ProductFeed
 
-**Extends EventEmitter**
+**Extends Feed**
 
 ProductFeed manages updating product listing elements on the live webpage.
 
@@ -98,21 +113,24 @@ Instantiates a product feed
 -   `cart`  string     The AwesomeCart instance
 -   `name`  string     The feed name
 -   `options`  object  Feed options
+-   `params` **...any** 
 
-#### filters
+### CartFeed
 
-Array, gets the active filters for this feed.
+**Extends Feed**
 
-Returns **any** Array
+CartFeed manages updating cart listing elements on the live webpage.
 
-#### filters
+#### constructor
 
-Sets the active filters for this feed. The feed is immediately
-refreshed with this property is changed.
+Instantiates a product feed
 
 **Parameters**
 
--   `filters`  Array
+-   `cart`  string     The AwesomeCart instance
+-   `name`  string     The feed name
+-   `options`  object  Feed options
+-   `params` **...any** 
 
 ### AwesomeCart
 
@@ -140,10 +158,11 @@ Adds a product to the cart by its sku and qty amount.
 
 **Parameters**
 
--   `sku`  string  The product sku to track in the cart.
--   `qty`  int     The product qty to add to cart.
+-   `sku`  string      The product sku to track in the cart.
+-   `qty`  int         The product qty to add to cart.
+-   `options`  object  Customization options associated with product
 
-#### removeFromCart
+#### removeFromCartBySKU
 
 Removes a qty of skus in the cart
 

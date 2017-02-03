@@ -2,20 +2,66 @@
 <html>
 <head>
   <title>Awesome Cart JS Demo</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet">
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
   <link href="style.css" rel="stylesheet" type="text/css"/>
+  <script
+  src="https://code.jquery.com/jquery-3.1.1.min.js"
+  integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+  crossorigin="anonymous"></script>
 </head>
 <body>
-  <div id="products">
+  <div class="well well-sm">
+      <strong>Category Title</strong>
+      <div class="btn-group">
+          <a href="#" id="list" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-th-list">
+          </span>List</a> <a href="#" id="grid" class="btn btn-default btn-sm"><span
+              class="glyphicon glyphicon-th"></span>Grid</a>
+      </div>
+
+      <div id="cart-embed" class="dropdown btn btn-sm pull-right">
+        <button class="btn btn-sm btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          <i class="material-icons">shopping_cart</i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton">
+          <div id="cart-embed-content"></div>
+        </div>
+      </div>
   </div>
-  <script type="text/javascript" src="dist/awc.standalone.js"></script>
+  <div id="products" class="row list-group">
+  </div>
+  <div id="cart-full">
+  </div>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+  <script type="text/javascript" src="/dist/awc.standalone.js"></script>
   <script type="text/javascript">
-  var cart = new awc.AwesomeCart();
-  cart.newProductFeed('products', {
-    cart: cart,
-    container: '#products',
-    product_template: awc.getTemplate('product_template.html')
-  })
-  cart.bootstrap()
+    // Initialize awc cart
+    var cart = new awc.AwesomeCart();
+
+    // create a product listing feed
+    cart.newProductFeed('products', {
+      container: '#products',
+      tpl: awc.getTemplate('templates/catalog.html')
+    })
+
+    // create an embeded cart feed
+    cart.newCartFeed('cart1', {
+      container: '#cart-embed-content',
+      tpl: awc.getTemplate('templates/cart_embeded.html')
+    })
+
+    // create a full cart feed
+    cart.newCartFeed('cart2', {
+      container: '#cart-full',
+      tpl: awc.getTemplate('templates/cart_full.html')
+    })
+    cart.bootstrap()
+
+    $(document).ready(function() {
+      $('#list').click(function(event){event.preventDefault();$('#products .item').addClass('list-group-item');});
+      $('#grid').click(function(event){event.preventDefault();$('#products .item').removeClass('list-group-item');$('#products .item').addClass('grid-group-item');});
+    });
   </script>
 </body>
 </html>
