@@ -189,4 +189,10 @@ Removes a qty of skus in the cart
 -   `sku`  string  The product sku to remove in the cart.
 -   `qty`  int     The product qty to remove to cart.
 
+#### bootstrap
+
+Kickstarts the cart logic. This causes session data to be downloaded while
+the cart is populated from a past session. Also feeds are initialized here
+to start consuming product listing and cart data.
+
 ### utils

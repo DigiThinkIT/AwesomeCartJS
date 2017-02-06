@@ -13,6 +13,7 @@ const queryString = require('query-string')
 const uuid = require('node-uuid')
 const _ = require('lodash')
 xhr.get = Promise.promisify(xhr.get)
+xhr.post = Promise.promisify(xhr.post)
 
 /**
  * The base store adapter class. All adapters are required to extend from this class.
@@ -20,6 +21,12 @@ xhr.get = Promise.promisify(xhr.get)
 class StoreAdapter extends EventEmitter {
   constructor() {
     super()
+  }
+
+  init() {
+    return new Promise((resolve, reject) => {
+      resolve()
+    })
   }
 
   getCurrency() { return null; }
@@ -39,18 +46,26 @@ class DemoStoreaAdapter extends StoreAdapter {
   constructor() {
     super()
     this._products = []
-    for(var i=1; i < 11; i++) {
-      this._products.push({
-        sku: `sku00${i}`,
-        name: `Demo Item ${i}`,
-        min: 1,
-        imageUrl: `http://placehold.it/400x250/?text400x250`,
-        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras congue, erat vel molestie pharetra, enim risus euismod libero, et aliquet neque libero ac dui.',
-        price: Math.floor(Math.random()*10)+10,
-        tags: ['demo']
-      })
 
-    }
+  }
+
+  init() {
+    return new Promise((resolve, reject) => {
+      for(var i=1; i < 11; i++) {
+        this._products.push({
+          sku: `sku00${i}`,
+          name: `Demo Item ${i}`,
+          min: 1,
+          imageUrl: `http://placehold.it/400x250/?text400x250`,
+          description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras congue, erat vel molestie pharetra, enim risus euismod libero, et aliquet neque libero ac dui.',
+          price: Math.floor(Math.random()*10)+10,
+          tags: ['demo']
+        })
+
+      }
+
+      resolve()
+    })
   }
 
   getCurrency() { return "USD"; }
@@ -242,8 +257,9 @@ class AwesomeCart extends EventEmitter {
     let { options: options } = sargs(arguments, { arg: 'options', default: {}})
     this.options = sargs(options,
       { arg: 'storeAdapter', default: module.exports.default_store_adapter || new DemoStoreaAdapter(), required: 1 },
-      { arg: 'currencyDecimals', default: 2},
-      { arg: 'feeds', default: {} }
+      { arg: 'currencyDecimals', default: 2 },
+      { arg: 'feeds', default: {} },
+      { arg: 'sessionStoreUrl', default: false }
     )
 
     this.storeAdapter = this.options.storeAdapter;
@@ -400,15 +416,40 @@ class AwesomeCart extends EventEmitter {
     return new Promise((resolve, reject) => {
       var product = this.storeAdapter.getProductBySKU(args.sku);
       if ( product ) {
-        this._cart.push({
+        var item = {
           product: product,
           qty: args.qty,
           options: args.options,
           id: uuid.v1(),
           unit: product.price,
           total: product.price * args.qty
-        })
-        this._emitUpdated()
+        }
+
+        if ( this.options.sessionStoreUrl ) {
+          xhr.post({
+            url: this.options.sessionStoreUrl,
+            json: {
+              action: 'addToCart',
+              data: { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
+            }
+          }).then((resp) => {
+            if ( resp.statusCode != 200 ) {
+              reject(resp.statusCode)
+            } else {
+              if ( resp.body.success ) {
+                this._cart.push(item)
+                this._emitUpdated()
+                resolve(item)
+              } else {
+                reject(resp.message)
+              }
+            }
+          })
+        } else {
+          this._cart.push(item)
+          this._emitUpdated()
+          resolve(item)
+        }
       }
     });
   }
@@ -421,8 +462,30 @@ class AwesomeCart extends EventEmitter {
         _.remove(this._cart, (item) => {
           return item.id == id;
         })
-        this._emitUpdated()
-        resolve()
+
+        if ( this.options.sessionStoreUrl ) {
+          xhr.post({
+            url: this.options.sessionStoreUrl,
+            json: {
+              action: 'removeFromCart',
+              data: id
+            }
+          }).then((resp) => {
+            if ( resp.statusCode != 200 ) {
+              reject(resp.statusCode)
+            } else {
+              if ( resp.body.success ) {
+                this._emitUpdated()
+                resolve()
+              } else {
+                reject(resp.message)
+              }
+            }
+          })
+        } else {
+          this._emitUpdated()
+          resolve()
+        }
       }
     })
   }
@@ -448,8 +511,52 @@ class AwesomeCart extends EventEmitter {
     });
   }
 
+  /**
+   * Kickstarts the cart logic. This causes session data to be downloaded while
+   * the cart is populated from a past session. Also feeds are initialized here
+   * to start consuming product listing and cart data.
+   */
   bootstrap() {
-    this.emit('init')
+    return new Promise((resolve, reject) => {
+      // initilize store adapter
+      this.storeAdapter.init()
+        .then(() => {
+          // then fetch session data
+          xhr.get({
+            url: this.options.sessionStoreUrl,
+            json: true
+          }).then((resp) => {
+            if ( resp.statusCode !== 200 ) {
+              reject('Unable to fetch session data, Server responded: ', resp.statusCode)
+            } else {
+              if ( resp.body.success ) {
+                // rebuilding cart from session data
+                for(var i in resp.body.data.items) {
+                  var itm = resp.body.data.items[i]
+                  var product = this.storeAdapter.getProductBySKU(itm.sku);
+                  if ( product ) {
+                    var item = {
+                      product: product,
+                      qty: itm.qty,
+                      options: itm.options,
+                      id: itm.id,
+                      unit: product.price,
+                      total: product.price * itm.qty
+                    }
+                    this._cart.push(item)
+                  }
+                }
+                // we are ready to go, kick off feeds
+                this.emit('init')
+                // update all feeds of new data
+                this._emitUpdated()
+              } else {
+                reject(resp.body.message)
+              }
+            }
+          })
+        })
+    })
   }
 
 }

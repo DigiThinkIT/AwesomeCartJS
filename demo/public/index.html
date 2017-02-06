@@ -52,7 +52,9 @@
   <script type="text/javascript" src="/dist/awc.standalone.js"></script>
   <script type="text/javascript">
     // Initialize awc cart
-    var cart = new awc.AwesomeCart();
+    var cart = new awc.AwesomeCart({
+      sessionStoreUrl: 'http://localhost:8080/awc'
+    });
 
     // create a product listing feed
     cart.newProductFeed('products', {

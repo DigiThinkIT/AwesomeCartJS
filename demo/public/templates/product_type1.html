@@ -1,0 +1,15 @@
+<div class="product">
+  <div class="sku">{{ sku }}</div>
+  <div class="name">{{ name }}</div>
+  <div class="image">
+    <img href="{{ imageUrl }}" alt="{{ name }}"/>
+  </div>
+  <div class="gallery">
+    {{#each detail.gallery }}
+      <img href="{{ this.url }}" alg="{{ this.alt }}" />
+    {{/each}}
+  </div>
+  <div class="description">
+    {{ description }}
+  </div>
+</div>
