@@ -11,6 +11,7 @@ const Promise = require('BlueBird')
 const Handlebars = require('handlebars')
 const queryString = require('query-string')
 const uuid = require('node-uuid')
+const _ = require('lodash')
 xhr.get = Promise.promisify(xhr.get)
 
 /**
@@ -37,32 +38,19 @@ class StoreAdapter extends EventEmitter {
 class DemoStoreaAdapter extends StoreAdapter {
   constructor() {
     super()
-    this._products = [
-      {
-        sku: "sku001",
-        name: "Demo Item1",
-        imageUrl: "https://placeholdit.imgix.net/~text?txtsize=16&txt=Item1&w=400&h=250",
-        description: 'First demo item',
-        price: 10,
-        tags: ['demo', 'first', 'group1', 'group2']
-      },
-      {
-        sku: "sku002",
-        name: "Demo Item2",
-        imageUrl: "https://placeholdit.imgix.net/~text?txtsize=16&txt=Item2&w=400&h=250",
-        description: 'Second demo item',
-        price: 20,
-        tags: ['demo', 'second', 'group1', 'group3']
-      },
-      {
-        sku: "sku003",
-        name: "Demo Item3",
-        imageUrl: "https://placeholdit.imgix.net/~text?txtsize=16&txt=Item3&w=400&h=250",
-        description: 'Third demo item',
-        price: 30,
-        tags: ['demo', 'third', 'group2', 'group3']
-      }
-    ]
+    this._products = []
+    for(var i=1; i < 11; i++) {
+      this._products.push({
+        sku: `sku00${i}`,
+        name: `Demo Item ${i}`,
+        min: 1,
+        imageUrl: `http://placehold.it/400x250/?text400x250`,
+        description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras congue, erat vel molestie pharetra, enim risus euismod libero, et aliquet neque libero ac dui.',
+        price: Math.floor(Math.random()*10)+10,
+        tags: ['demo']
+      })
+
+    }
   }
 
   getCurrency() { return "USD"; }
@@ -73,7 +61,7 @@ class DemoStoreaAdapter extends StoreAdapter {
 
   getProductBySKU(sku) {
     var result = this._products.filter((p) => {
-      return p.sku = sku;
+      return p.sku == sku;
     })
 
     return ( result.length > 0 )?result[0]:false
@@ -162,7 +150,7 @@ class Feed extends EventEmitter {
           count++;
         }
 
-        var html = tpl({items: this.items, is_empty: count == 0})
+        var html = tpl({items: this.items, is_empty: count == 0, cart: this.cart })
         this.container.insertAdjacentHTML('beforeend', html)
 
         this.emit('updated', this, this.products)
@@ -248,6 +236,9 @@ class AwesomeCart extends EventEmitter {
   constructor() {
     super()
     this._cart = []
+    this._lastTotalCount = 0
+    this._lastTotalItems = 0
+
     let { options: options } = sargs(arguments, { arg: 'options', default: {}})
     this.options = sargs(options,
       { arg: 'storeAdapter', default: module.exports.default_store_adapter || new DemoStoreaAdapter(), required: 1 },
@@ -256,6 +247,43 @@ class AwesomeCart extends EventEmitter {
     )
 
     this.storeAdapter = this.options.storeAdapter;
+  }
+
+  /**
+   * Returns total line items in the cart.
+   * @return int
+   */
+  get totalItems() {
+    return this._cart.length
+  }
+
+  get lastTotalItems() {
+    return this._lastTotalItems
+  }
+
+  /**
+  * Returns sum of all qty values in cart.
+  * @return int
+  */
+  get totalCount() {
+    var count = 0;
+    for(var i in this._cart) {
+      count += this._cart[i].qty
+    }
+
+    return count
+  }
+
+  get lastTotalCount() {
+    return this._lastTotalCount
+  }
+
+  /**
+   * Returns the list of line items in the cart.
+   * @return Array
+   */
+  get items() {
+    return this._cart
   }
 
   /**
@@ -303,18 +331,26 @@ class AwesomeCart extends EventEmitter {
    * Updates click event references and overall UI handling
    */
   updateUI() {
-    var addtocartElems = document.querySelectorAll('[data-awc-addtocart]');
-    for(var i = 0; i < addtocartElems.length; i++) {
-      var btn = addtocartElems[i];
+    var addToCartElems = document.querySelectorAll('[data-awc-addtocart]');
+    for(var i = 0; i < addToCartElems.length; i++) {
+      var btn = addToCartElems[i];
       if ( !hasClass(btn, 'awc-bound') ) {
         btn.addEventListener('click', this._onAddToCartClick.bind(this))
+        addClass(btn, 'awc-bound')
+      }
+    }
+
+    var removeFromCartElems = document.querySelectorAll('[data-awc-removefromcart]');
+    for(var i = 0; i < removeFromCartElems.length; i++) {
+      var btn = removeFromCartElems[i]
+      if ( !hasClass(btn, 'awc-bound') ) {
+        btn.addEventListener('click', this._onRemoveFromCartClick.bind(this))
         addClass(btn, 'awc-bound')
       }
     }
   }
 
   _onAddToCartClick(e) {
-    log('Add to cart', e, this)
     var btn = e.target;
     var sku = btn.dataset.id;
     var qty = btn.dataset.qty || 1;
@@ -323,6 +359,16 @@ class AwesomeCart extends EventEmitter {
       options = queryString.parse(options)
     }
     this.addToCart(sku, qty, options)
+  }
+
+  _onRemoveFromCartClick(e) {
+    var btn = e.target;
+    var id = btn.dataset.id;
+    this.removeFromCart(id)
+      .catch((err) => {
+        console.dir(btn, id, btn.dataset)
+        console.error(err)
+      })
   }
 
   listProducts() {
@@ -350,7 +396,8 @@ class AwesomeCart extends EventEmitter {
       { arg: 'qty', default: 1 },
       { arg: 'options', default: {}}
     )
-    return new Promise((function(resolve, reject) {
+
+    return new Promise((resolve, reject) => {
       var product = this.storeAdapter.getProductBySKU(args.sku);
       if ( product ) {
         this._cart.push({
@@ -361,9 +408,29 @@ class AwesomeCart extends EventEmitter {
           unit: product.price,
           total: product.price * args.qty
         })
-        this.emit('updated')
+        this._emitUpdated()
       }
-    }).bind(this));
+    });
+  }
+
+  removeFromCart(id) {
+    return new Promise((resolve, reject) => {
+      if ( !id ) {
+        reject("Invalid id")
+      } else {
+        _.remove(this._cart, (item) => {
+          return item.id == id;
+        })
+        this._emitUpdated()
+        resolve()
+      }
+    })
+  }
+
+  _emitUpdated() {
+    this.emit('updated')
+    this._lastTotalItems = this.totalItems
+    this._lastTotalCount = this.totalCount
   }
 
   /**
@@ -386,6 +453,21 @@ class AwesomeCart extends EventEmitter {
   }
 
 }
+
+Handlebars.registerHelper('currency', function(value, ctx) {
+
+  var context = ctx?(ctx.cart?ctx:this):this
+
+  if ( context.cart === undefined ) {
+    console.error('Contexts: ', context, this)
+    throw new Error('Cart not found in current context.')
+  }
+  if ( value === undefined ) {
+    return '';
+  }
+
+  return context.cart.storeAdapter.formatCurrency(value)
+})
 
 module.exports = {
   AwesomeCart: AwesomeCart,

@@ -138,6 +138,24 @@ Instantiates a product feed
 
 The main cart class. All managing of shopping cart happens here.
 
+#### totalItems
+
+Returns total line items in the cart.
+
+Returns **any** int
+
+#### totalCount
+
+Returns sum of all qty values in cart.
+
+Returns **any** int
+
+#### items
+
+Returns the list of line items in the cart.
+
+Returns **any** Array
+
 #### newProductFeed
 
 Adds a new managed product feed. Product feeds automate fetching and displaying
