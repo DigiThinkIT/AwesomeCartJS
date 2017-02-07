@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+  <title>Awesome Cart JS Demo</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet">
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.5.2/animate.min.css" rel="stylesheet" type="text/css">
+  <link href="/css/style.css" rel="stylesheet" type="text/css"/>
+  <script
+  src="https://code.jquery.com/jquery-3.1.1.min.js"
+  integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+  crossorigin="anonymous"></script>
+</head>
+<body>
+  <nav id="header" class="navbar navbar-fixed-top">
+    <div id="header-container" class="container-fluid navbar-container">
+      <div id="navbar" class="navbar-collapse">
+
+          <div id="cart-embed" class="dropdown btn btn-sm pull-right">
+            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+              <i class="material-icons">shopping_cart</i>
+              <div class="cart-count"><span class="content"></span></div>
+            </button>
+            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton">
+              <div id="cart-embed-content"></div>
+            </div>
+          </div><!-- /.cart-embed -->
+
+    </div><!-- /.nav-collapse -->
+  </div><!-- /.container -->
+</nav><!-- /.navbar -->
+
+
+  <div id="product">
+  </div>
+
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+  <script type="text/javascript" src="/js/jquery.helpers.js"></script>
+  <script type="text/javascript" src="/dist/awc.standalone.js"></script>
+  <script type="text/javascript" src="/js/cart.js"></script>
+  <script type="text/javascript">
+    var productTemplate = awc.getTemplate('/templates/product_type1.html')
+
+    function updateProductDetails() {
+      args = awc.parseHash()
+      if ( args.sku ) {
+        cart.getProductBySKU(args.sku)
+          .then(cart.applyTpl.bind(cart, '#product', productTemplate))
+          .then((result) => {
+            console.log('update product template result: ', result)
+            cart.updateUI();
+          })
+          .catch(console.error)
+      }
+    }
+
+    // trigger fetching product details and rendering template at runtime
+    cart.on('init', updateProductDetails)
+    cart.on('hashchange', updateProductDetails) // update details on hashchange
+    cart.bootstrap()
+  </script>
+</body>
+</html>

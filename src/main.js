@@ -43,25 +43,26 @@ class StoreAdapter extends EventEmitter {
  * A demo store adapter with hardcoded products to demonstrate how adapters work.
  */
 class DemoStoreaAdapter extends StoreAdapter {
-  constructor() {
+  constructor(catalog) {
     super()
-    this._products = []
-
+    this._products = catalog || []
   }
 
   init() {
     return new Promise((resolve, reject) => {
-      for(var i=1; i < 11; i++) {
-        this._products.push({
-          sku: `sku00${i}`,
-          name: `Demo Item ${i}`,
-          min: 1,
-          imageUrl: `http://placehold.it/400x250/?text400x250`,
-          description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras congue, erat vel molestie pharetra, enim risus euismod libero, et aliquet neque libero ac dui.',
-          price: Math.floor(Math.random()*10)+10,
-          tags: ['demo']
-        })
+      if ( this._products.length == 0 ) {
+        for(var i=1; i < 11; i++) {
+          this._products.push({
+            sku: `sku00${i}`,
+            name: `Demo Item ${i}`,
+            min: 1,
+            imageUrl: `http://placehold.it/400x250/?text400x250`,
+            description: 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Cras congue, erat vel molestie pharetra, enim risus euismod libero, et aliquet neque libero ac dui.',
+            price: Math.floor(Math.random()*10)+10,
+            tags: ['demo']
+          })
 
+        }
       }
 
       resolve()
@@ -75,11 +76,13 @@ class DemoStoreaAdapter extends StoreAdapter {
   formatCurrency(currency, decimals) { return `$${currency.toFixed(decimals)}`; }
 
   getProductBySKU(sku) {
-    var result = this._products.filter((p) => {
-      return p.sku == sku;
-    })
+    return new Promise((resolve, reject) => {
+      var result = this._products.filter((p) => {
+        return p.sku == sku;
+      })
 
-    return ( result.length > 0 )?result[0]:false
+      resolve(( result.length > 0 )?result[0]:false)
+    })
   }
 
   fetchProducts() {
@@ -263,6 +266,9 @@ class AwesomeCart extends EventEmitter {
     )
 
     this.storeAdapter = this.options.storeAdapter;
+    window.addEventListener('hashchange', (e) => {
+      this.emit('hashchange', e)
+    })
   }
 
   /**
@@ -413,20 +419,26 @@ class AwesomeCart extends EventEmitter {
       { arg: 'options', default: {}}
     )
 
-    return new Promise((resolve, reject) => {
-      var product = this.storeAdapter.getProductBySKU(args.sku);
-      if ( product ) {
-        var item = {
-          product: product,
-          qty: args.qty,
-          options: args.options,
-          id: uuid.v1(),
-          unit: product.price,
-          total: product.price * args.qty
-        }
+    return this.storeAdapter.getProductBySKU(args.sku)
+      .then((product) => {
+        if ( product ) {
+          var item = {
+            product: product,
+            qty: args.qty,
+            options: args.options,
+            id: uuid.v1(),
+            unit: product.price,
+            total: product.price * args.qty
+          }
 
-        if ( this.options.sessionStoreUrl ) {
-          xhr.post({
+          if ( this.options.sessionStoreUrl ) {
+            return item;
+          }
+        }
+        return false
+      }).then((item) => {
+        if ( item ) {
+          return xhr.post({
             url: this.options.sessionStoreUrl,
             json: {
               action: 'addToCart',
@@ -434,24 +446,23 @@ class AwesomeCart extends EventEmitter {
             }
           }).then((resp) => {
             if ( resp.statusCode != 200 ) {
-              reject(resp.statusCode)
+              throw new error(resp.statusCode)
             } else {
               if ( resp.body.success ) {
                 this._cart.push(item)
                 this._emitUpdated()
-                resolve(item)
+                return item;
               } else {
-                reject(resp.message)
+                throw new error(resp.message)
               }
             }
           })
         } else {
-          this._cart.push(item)
-          this._emitUpdated()
-          resolve(item)
+            this._cart.push(item)
+            this._emitUpdated()
+            return item;
         }
-      }
-    });
+      });
   }
 
   removeFromCart(id) {
@@ -488,6 +499,34 @@ class AwesomeCart extends EventEmitter {
         }
       }
     })
+  }
+
+  getProductBySKU(sku) {
+    return this.storeAdapter.getProductBySKU(sku)
+  }
+
+  applyTpl(selector, tpl, data) {
+    var template = tpl;
+    return new Promise((resolve, reject) => {
+      console.log(tpl)
+      if ( tpl.isFulfilled() ) {
+        // if template is ready just pass along data
+        resolve(data);
+      } else {
+        // wait for template to load
+        return tpl.then(() => { return data; })
+      }
+    })
+    .then((data) => {
+      var tpl = template.value();
+      var html = tpl(Object.assign({cart: this.cart }, data))
+      var container = (typeof selector == 'string')?document.querySelector(selector):selector;
+      console.log('container', container)
+      container.innerHTML = html
+
+      return true;
+    })
+
   }
 
   _emitUpdated() {
@@ -531,25 +570,37 @@ class AwesomeCart extends EventEmitter {
             } else {
               if ( resp.body.success ) {
                 // rebuilding cart from session data
+                var jobs = []
                 for(var i in resp.body.data.items) {
                   var itm = resp.body.data.items[i]
-                  var product = this.storeAdapter.getProductBySKU(itm.sku);
-                  if ( product ) {
-                    var item = {
-                      product: product,
-                      qty: itm.qty,
-                      options: itm.options,
-                      id: itm.id,
-                      unit: product.price,
-                      total: product.price * itm.qty
-                    }
-                    this._cart.push(item)
-                  }
+                  jobs.push(function(itm) {
+                    return this.storeAdapter.getProductBySKU(itm.sku)
+                      .then((product) => {
+                        if ( product ) {
+                          var item = {
+                            product: product,
+                            qty: itm.qty,
+                            options: itm.options,
+                            id: itm.id,
+                            unit: product.price,
+                            total: product.price * itm.qty
+                          }
+                          this._cart.push(item)
+                          return item;
+                        }
+
+                        return false;
+                      });
+                  }.bind(this, itm)())
                 }
-                // we are ready to go, kick off feeds
-                this.emit('init')
-                // update all feeds of new data
-                this._emitUpdated()
+
+                return Promise.join.apply(Promise, jobs).then(() => {
+                  // we are ready to go, kick off feeds
+                  this.emit('init')
+                  // update all feeds of new data
+                  this._emitUpdated()
+                })
+
               } else {
                 reject(resp.body.message)
               }
@@ -560,6 +611,37 @@ class AwesomeCart extends EventEmitter {
   }
 
 }
+
+Handlebars.registerHelper('eachEven', function(arr, scope) {
+  if ( arr && arr.length > 0 ) {
+    var buffer = "";
+    for(var i = 0; i < arr.length; i++) {
+      var item = arr[i]
+      item.$index = i
+      item.$is_even = (i % 2) == 0
+      buffer += scope.fn(item)
+    }
+    return buffer;
+  } else {
+    return scope.inverse(this)
+  }
+})
+
+Handlebars.registerHelper('is_even', function(value, scope) {
+  if ( (value % 2) == 0 ) {
+    return scope.fn(this)
+  } else {
+    return scope.inverse(this);
+  }
+})
+
+Handlebars.registerHelper('is_odd', function(value, scope) {
+  if ( (value % 2) == 1 ) {
+    return scope.fn(this)
+  } else {
+    return scope.inverse(this);
+  }
+})
 
 Handlebars.registerHelper('currency', function(value, ctx) {
 
@@ -585,5 +667,17 @@ module.exports = {
       // compile template and return
       return Handlebars.compile(resp.body)
     })
-  }
+  },
+  parseHash: function() {
+    var args = {},
+        pair = null,
+        parts = decodeURIComponent(window.location.hash.replace('#', '')).trim().split('&')
+    for(var i in parts) {
+      pair = parts[i].split('=');
+      if ( pair.length > 1 ) { args[pair[0].trim()] = pair[1].trim(); }
+    }
+    return args;
+  },
+  Handlebars: Handlebars,
+  Promise: Promise
 }

@@ -1,5 +1,6 @@
 body {
-  margin: 4em 1em 1em 1em;
+  margin: 0;
+  padding: 0;
 }
 .glyphicon { margin-right:5px; }
 .thumbnail
@@ -80,6 +81,14 @@ body {
   padding: .5em;
 }
 
+#product {
+  margin-top: 4em;
+}
+
+#products {
+  margin: 4em 1em 1em 1em;
+}
+
 .product {
   margin: .5em;
   border-bottom: 1px solid #888;
@@ -139,4 +148,12 @@ body {
   left: 50%;
   top: 50%;
   transform: translateX(-50%) translateY(-50%);
+}
+
+#product .section {
+  background-position: center center;
+}
+
+#product .section:nth-of-type(odd) {
+  color: #fff;
 }
