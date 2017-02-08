@@ -25,7 +25,7 @@ class StoreAdapter extends EventEmitter {
 
   init() {
     return new Promise((resolve, reject) => {
-      resolve()
+      resolve({data: [], success: true})
     })
   }
 
@@ -37,15 +37,25 @@ class StoreAdapter extends EventEmitter {
 
   fetchProducts() { return null; }
 
+  fetchCartSession() {
+    return null;
+  }
+
+  sessionAction(action, data) {
+    return null;
+  }
+
 }
 
 /**
  * A demo store adapter with hardcoded products to demonstrate how adapters work.
  */
 class DemoStoreaAdapter extends StoreAdapter {
-  constructor(catalog) {
+  constructor(catalog, sessionHandler, sessionActionHandler) {
     super()
     this._products = catalog || []
+    this._sessionHandler = sessionHandler
+    this._sessionActionHandler = sessionActionHandler
   }
 
   init() {
@@ -65,7 +75,7 @@ class DemoStoreaAdapter extends StoreAdapter {
         }
       }
 
-      resolve()
+      resolve(this.fetchCartSession())
     })
   }
 
@@ -74,6 +84,26 @@ class DemoStoreaAdapter extends StoreAdapter {
   getCurrencySymbol() { return "$"; }
 
   formatCurrency(currency, decimals) { return `$${currency.toFixed(decimals)}`; }
+
+  fetchCartSession() {
+    return new Promise((resolve, reject) => {
+      if ( this._sessionHandler ) {
+        this._sessionHandler(resolve, reject);
+      } else {
+        resolve({data: [], success: true})
+      }
+    })
+  }
+
+  sessionAction(action, data) {
+    return new Promise((resolve, reject) => {
+      if ( this._sessionActionHandler ) {
+        this._sessionActionHandler(action , data, resolve, reject)
+      } else {
+        resolve({data: null, success: true})
+      }
+    })
+  }
 
   getProductBySKU(sku) {
     return new Promise((resolve, reject) => {
@@ -185,6 +215,11 @@ class Feed extends EventEmitter {
 
   empty() {
     var container = this.container;
+
+    if ( !container ) {
+      throw new Error('Invalid container')
+    }
+
     while(container.hasChildNodes()) {
       container.removeChild(container.lastChild);
     }
@@ -290,7 +325,7 @@ class AwesomeCart extends EventEmitter {
   get totalCount() {
     var count = 0;
     for(var i in this._cart) {
-      count += this._cart[i].qty
+      count += this._cart[i].qty || 0
     }
 
     return count
@@ -339,6 +374,7 @@ class AwesomeCart extends EventEmitter {
       { arg: 'container' },
       { arg: 'tpl' }
     )
+
     this.options.feeds[name] = new CartFeed(this, name, options)
     this.options.feeds[name].on('updated', this.updateUI.bind(this))
   }
@@ -355,7 +391,7 @@ class AwesomeCart extends EventEmitter {
   updateUI() {
     var addToCartElems = document.querySelectorAll('[data-awc-addtocart]');
     for(var i = 0; i < addToCartElems.length; i++) {
-      var btn = addToCartElems[i];
+      var btn = addToCartElems[i]
       if ( !hasClass(btn, 'awc-bound') ) {
         btn.addEventListener('click', this._onAddToCartClick.bind(this))
         addClass(btn, 'awc-bound')
@@ -422,6 +458,7 @@ class AwesomeCart extends EventEmitter {
     return this.storeAdapter.getProductBySKU(args.sku)
       .then((product) => {
         if ( product ) {
+
           var item = {
             product: product,
             qty: args.qty,
@@ -431,12 +468,27 @@ class AwesomeCart extends EventEmitter {
             total: product.price * args.qty
           }
 
-          if ( this.options.sessionStoreUrl ) {
-            return item;
-          }
+          this._cart.push(item)
+          return item;
         }
+
         return false
-      }).then((item) => {
+      })
+      .then((item) => {
+        if (item) {
+          return this.storeAdapter.sessionAction(
+            'addToCart',
+            { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
+          )
+        }
+
+        return false
+      })
+      .then(() => {
+        this._emitUpdated()
+      })
+      /*
+      .then((item) => {
         if ( item ) {
           return xhr.post({
             url: this.options.sessionStoreUrl,
@@ -462,7 +514,7 @@ class AwesomeCart extends EventEmitter {
             this._emitUpdated()
             return item;
         }
-      });
+      });*/
   }
 
   removeFromCart(id) {
@@ -556,59 +608,55 @@ class AwesomeCart extends EventEmitter {
    * to start consuming product listing and cart data.
    */
   bootstrap() {
-    return new Promise((resolve, reject) => {
-      // initilize store adapter
-      this.storeAdapter.init()
-        .then(() => {
-          // then fetch session data
-          xhr.get({
-            url: this.options.sessionStoreUrl,
-            json: true
-          }).then((resp) => {
-            if ( resp.statusCode !== 200 ) {
-              reject('Unable to fetch session data, Server responded: ', resp.statusCode)
-            } else {
-              if ( resp.body.success ) {
-                // rebuilding cart from session data
-                var jobs = []
-                for(var i in resp.body.data.items) {
-                  var itm = resp.body.data.items[i]
-                  jobs.push(function(itm) {
-                    return this.storeAdapter.getProductBySKU(itm.sku)
-                      .then((product) => {
-                        if ( product ) {
-                          var item = {
-                            product: product,
-                            qty: itm.qty,
-                            options: itm.options,
-                            id: itm.id,
-                            unit: product.price,
-                            total: product.price * itm.qty
-                          }
-                          this._cart.push(item)
-                          return item;
-                        }
+    // initilize store adapter
+    return this.storeAdapter.init()
+      .then((resp) => {
+        if ( resp.success ) {
+          // rebuilding cart from session data
+          var jobs = []
 
-                        return false;
-                      });
-                  }.bind(this, itm)())
-                }
+          for(var i in resp.data.items) {
+            var itm = resp.data.items[i]
 
-                return Promise.join.apply(Promise, jobs).then(() => {
-                  // we are ready to go, kick off feeds
-                  this.emit('init')
-                  // update all feeds of new data
-                  this._emitUpdated()
-                })
+            jobs.push(function(itm) {
 
-              } else {
-                reject(resp.body.message)
-              }
-            }
+              return this.storeAdapter.getProductBySKU(itm.sku)
+                .then((product) => {
+                  if ( product ) {
+
+                    var item = {
+                      product: product,
+                      qty: itm.qty,
+                      options: itm.options,
+                      id: itm.id,
+                      unit: product.price,
+                      total: product.price * itm.qty
+                    }
+
+                    this._cart.push(item)
+                    return item;
+                  }
+
+                  return false;
+                });
+
+            }.bind(this, itm)())
+          }
+
+          return Promise.join.apply(Promise, jobs).then(() => {
+            // we are ready to go, kick off feeds
+            this.emit('init')
+            // update all feeds of new data
+            this._emitUpdated()
           })
-        })
-    })
-  }
+        }
+      }) /* eof this.storeAdapter.init().then() */
+      .catch((err) => {
+        console.error("Could not initialize Store Adapter!")
+        console.error(err)
+      }) /* eof this.storeAdapter.init().catch() */
+
+  } /* eof bootstrap() */
 
 }
 
@@ -679,5 +727,7 @@ module.exports = {
     return args;
   },
   Handlebars: Handlebars,
-  Promise: Promise
+  Promise: Promise,
+  get: xhr.get,
+  post: xhr.post
 }

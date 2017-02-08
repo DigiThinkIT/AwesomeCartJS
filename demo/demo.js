@@ -44,6 +44,8 @@ app.get('/awc', function(req, res, next) {
 })
 app.post('/awc', function(req, res, next) {
   var ses = getSession(req)
+  console.log(req.body)
+
   if ( req.body.action == 'addToCart' ) {
     ses.cart.items.push(req.body.data)
     res.send({ 'success': true })
@@ -53,7 +55,7 @@ app.post('/awc', function(req, res, next) {
     })
     res.send({ 'success': true })
   } else {
-    res.send({success: false, message: 'unknown command'})
+    res.send({success: false, message: 'unknown command', body: req.body})
   }
 
   next()

@@ -54,12 +54,38 @@ for(var i=1; i <= 9; i++) {
 
 // Initialize awc cart
 var cart = new awc.AwesomeCart({
-  storeAdapter: new awc.DemoStoreaAdapter(demoCatalog),
-  sessionStoreUrl: 'http://localhost:8080/awc'
+  storeAdapter: new awc.DemoStoreaAdapter(
+    demoCatalog,
+    function(resolve, reject) {
+      $.get('/awc', function(resp, status) {
+        if ( status == 'success' ) {
+          resolve(resp)
+        } else {
+          reject(new Error(status))
+        }
+      })
+    },
+    function(action, data, resolve, reject) {
+      $.ajax({
+        type: "POST",
+        url: '/awc',
+        contentType: 'application/json',
+        dataType: 'json',
+        data: JSON.stringify({'action': action, 'data': data}),
+        success: function(resp, status) {
+          if ( status == 'success' ) {
+            resolve(resp)
+          } else {
+            reject(new Error(status))
+          }
+        }
+      });
+    }
+  )
 });
 
 // create an embeded cart feed
-cart.newCartFeed('cart1', {
+cart.newCartFeed('embeded_cart', {
   container: '#cart-embed-content',
   tpl: awc.getTemplate('templates/cart_embeded.html')
 })
@@ -70,7 +96,7 @@ cart.on('updated', function() {
     if ( cart.totalCount > 0 ) {
       $('.cart-count').fadeIn('slow')
       $('.cart-count .content').text(cart.totalCount)
-      $('.cart-count').animateCss('flip');
+      $('.cart-count').animateCss('flip')
     } else {
       $('.cart-count').fadeOut('slow')
     }
