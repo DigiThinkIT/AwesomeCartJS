@@ -30,21 +30,13 @@ class StoreAdapter extends EventEmitter {
   }
 
   getCurrency() { return null; }
-
   getCurrencySymbol() { return null; }
-
   formatCurrency(currency) { return null; }
-
-  fetchProducts() { return null; }
-
-  fetchCartSession() {
-    return null;
-  }
-
-  sessionAction(action, data) {
-    return null;
-  }
-
+  getProductBySKU(sku, detailed) { return null; }
+  fetchProducts(tags, terms, start, limit) { return null; }
+  fetchCartSession() { return null; }
+  sessionAction(action, data) { return null; }
+  loadTemplate(name) { return null; }
 }
 
 /**
@@ -105,7 +97,7 @@ class DemoStoreaAdapter extends StoreAdapter {
     })
   }
 
-  getProductBySKU(sku) {
+  getProductBySKU(sku, detailed) {
     return new Promise((resolve, reject) => {
       var result = this._products.filter((p) => {
         return p.sku == sku;
@@ -118,14 +110,17 @@ class DemoStoreaAdapter extends StoreAdapter {
   fetchProducts() {
     //var tags, terms;
     //[tags, terms] = optionals(arguments, [])
-    let { tags: tags, terms: terms } = sargs(arguments,
+    let { tags: tags, terms: terms, start: start, limit: limit } = sargs(arguments,
       { arg: 'tags', default: [] },
-      { arg: 'terms'}
+      { arg: 'terms'},
+      { arg: 'start', default: 0},
+      { arg: 'limit', default: 9}
     )
 
     return new Promise((function(resolve, reject) {
       var products = [];
-      for(var i in this._products) {
+      //for(var i in this._products) {
+      for(var i = start; i < start + limit; i++) {
         var prod = this._products[i];
         if ( tags ) {
           if ( prod.tags.every(function(elem) { return tags.indexOf(elem) >= -1; }) ) {
@@ -202,6 +197,7 @@ class Feed extends EventEmitter {
         this.container.insertAdjacentHTML('beforeend', html)
 
         this.emit('updated', this, this.products)
+        return null;
       })
       .catch((err) => {
         console.error(err)
@@ -343,6 +339,17 @@ class AwesomeCart extends EventEmitter {
     return this._cart
   }
 
+  template(name) {
+    var tpl = this.storeAdapter.loadTemplate(name)
+    if ( !tpl ) {
+      tpl = module.exports.loadTemplate(name)
+    } else {
+      tpl = module.exports.loadTemplate(tpl)
+    }
+
+    return tpl
+  }
+
   /**
    * Adds a new managed product feed. Product feeds automate fetching and displaying
    * product listings.
@@ -382,6 +389,7 @@ class AwesomeCart extends EventEmitter {
   fetchCartItems(filters) {
     return new Promise((resolve, reject) => {
       resolve(this._cart)
+      return null;
     })
   }
 
@@ -648,7 +656,10 @@ class AwesomeCart extends EventEmitter {
             this.emit('init')
             // update all feeds of new data
             this._emitUpdated()
+            return true;
           })
+        } else {
+          return false;
         }
       }) /* eof this.storeAdapter.init().then() */
       .catch((err) => {
@@ -691,12 +702,14 @@ Handlebars.registerHelper('is_odd', function(value, scope) {
   }
 })
 
-Handlebars.registerHelper('currency', function(value, ctx) {
+Handlebars.registerHelper('currency', function(value, ctx, scope) {
 
-  var context = ctx?(ctx.cart?ctx:this):this
+  var context = scope.data.root;
+  console.log("CONTEXT", context, scope)
+  //var context = ctx?(ctx.cart?ctx:ctx.root.cart?ctx.root:this):this
 
   if ( context.cart === undefined ) {
-    console.error('Contexts: ', context, this)
+    console.error('Contexts: ', context, this, ctx)
     throw new Error('Cart not found in current context.')
   }
   if ( value === undefined ) {
@@ -710,11 +723,21 @@ module.exports = {
   AwesomeCart: AwesomeCart,
   DemoStoreaAdapter: DemoStoreaAdapter,
   StoreAdapter: StoreAdapter,
-  getTemplate: function(url) {
-    return xhr.get(url).then((resp) => {
-      // compile template and return
-      return Handlebars.compile(resp.body)
-    })
+  loadTemplate: function(url) {
+    if ( typeof url == "string" ) {
+      return xhr.get(url).then((resp) => {
+        // compile template and return
+        return Handlebars.compile(resp.body)
+      })
+    } else {
+      return url.then((resp) => {
+        if ( typeof resp == "string" ) {
+          return Handlebars.compile(resp)
+        } else {
+          return resp
+        }
+      })
+    }
   },
   parseHash: function() {
     var args = {},
@@ -728,6 +751,10 @@ module.exports = {
   },
   Handlebars: Handlebars,
   Promise: Promise,
+  uuid: uuid,
   get: xhr.get,
   post: xhr.post
 }
+
+// To be deprecated
+module.exports.getTemplate = module.exports.loadTemplate
