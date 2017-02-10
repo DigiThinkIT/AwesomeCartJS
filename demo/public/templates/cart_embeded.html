@@ -16,9 +16,9 @@
         <img class="product-image" src="{{ this.product.imageUrl }}" alt="{{ this.product.name }}" title="{{ this.product.name }}"/>
       </div>
       <div class="col-xs-6 product-title">{{ this.product.name }}<br/><a data-awc-removeFromCart data-id="{{ this.id }}">remove</a></div>
-      <div class="col-xs-1 product-unit"><span class="pull-right">{{ currency this.unit .. }}</span></div>
+      <div class="col-xs-1 product-unit"><span class="pull-right">{{ currency this.unit }}</span></div>
       <div class="col-xs-1 product-qty"><span class="pull-right">{{ this.qty }}</span></div>
-      <div class="col-xs-2 product-total"><span class="pull-right">{{ currency this.total .. }}</span></div>
+      <div class="col-xs-2 product-total"><span class="pull-right">{{ currency this.total }}</span></div>
     </div>
   {{/each}}
   <div class="row">

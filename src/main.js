@@ -158,11 +158,17 @@ class Feed extends EventEmitter {
       throw err
     }
 
+    this._waitFor = []
+
     this.cart.on('init', this.onInit.bind(this))
   }
 
   onInit() {
     this.update()
+  }
+
+  updateWaitFor(prm) {
+    this._waitFor.push(prm)
   }
 
   update() {
@@ -193,11 +199,21 @@ class Feed extends EventEmitter {
           count++;
         }
 
-        var html = tpl({items: this.items, is_empty: count == 0, cart: this.cart })
+        var obj = { items: this.items, is_empty: count == 0, $cart: this.cart, $parent: this }
+        var html = tpl(obj)
         this.container.insertAdjacentHTML('beforeend', html)
 
-        this.emit('updated', this, this.products)
-        return null;
+        if ( this._waitFor.length > 0 ) {
+          return Promise.join.apply(Promise, this._waitFor)
+            .then(() => {
+              this._waitFor = [] // reset wait list
+              this.emit('updated', this, this.products)
+              return true;
+            })
+        } else {
+          this.emit('updated', this, this.products)
+          return true;
+        }
       })
       .catch((err) => {
         console.error(err)
@@ -236,7 +252,7 @@ class Feed extends EventEmitter {
    */
   set filters(filters) {
     this.options.filters = filters || [];
-    this.refresh()
+    this.update()
   }
 
 }
@@ -325,6 +341,10 @@ class AwesomeCart extends EventEmitter {
     }
 
     return count
+  }
+
+  get feed() {
+    return this.options.feeds
   }
 
   get lastTotalCount() {
@@ -495,34 +515,6 @@ class AwesomeCart extends EventEmitter {
       .then(() => {
         this._emitUpdated()
       })
-      /*
-      .then((item) => {
-        if ( item ) {
-          return xhr.post({
-            url: this.options.sessionStoreUrl,
-            json: {
-              action: 'addToCart',
-              data: { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
-            }
-          }).then((resp) => {
-            if ( resp.statusCode != 200 ) {
-              throw new error(resp.statusCode)
-            } else {
-              if ( resp.body.success ) {
-                this._cart.push(item)
-                this._emitUpdated()
-                return item;
-              } else {
-                throw new error(resp.message)
-              }
-            }
-          })
-        } else {
-            this._cart.push(item)
-            this._emitUpdated()
-            return item;
-        }
-      });*/
   }
 
   removeFromCart(id) {
@@ -568,7 +560,6 @@ class AwesomeCart extends EventEmitter {
   applyTpl(selector, tpl, data) {
     var template = tpl;
     return new Promise((resolve, reject) => {
-      console.log(tpl)
       if ( tpl.isFulfilled() ) {
         // if template is ready just pass along data
         resolve(data);
@@ -579,12 +570,20 @@ class AwesomeCart extends EventEmitter {
     })
     .then((data) => {
       var tpl = template.value();
-      var html = tpl(Object.assign({cart: this.cart }, data))
+      var wait = []
+      var html = tpl(Object.assign({$cart: this.cart, $parent: { updateWaitFor: function(w) { wait.push(w) } } }, data))
       var container = (typeof selector == 'string')?document.querySelector(selector):selector;
-      console.log('container', container)
       container.innerHTML = html
 
-      return true;
+      // allows inserting extra promises into chain before resolving
+      if ( wait.length > 0 ) {
+        return Promise.join.apply(Promise, wait)
+          .then(() => {
+            return true;
+          })
+      } else {
+        return true;
+      }
     })
 
   }
@@ -671,6 +670,27 @@ class AwesomeCart extends EventEmitter {
 
 }
 
+function delayedTpl(id, tpl_name, obj) {
+  var tpl_promise = cart.template(tpl_name)
+    .then((tpl) => {
+      var html = tpl(obj)
+      var container = document.getElementById(id)
+      container.innerHTML = html
+      container.className = "awc-placeholder loaded"
+      return true
+    })
+
+    obj.$parent.updateWaitFor(tpl_promise)
+}
+
+Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
+  var id = awc.uuid.v4()
+  obj.$cart = scope.data.root.$cart
+  obj.$parent = scope.data.root.$parent
+  delayedTpl(id, tpl_name, obj)
+  return '<div id="'+id+'" class="awc-placeholder loading"></div>';
+})
+
 Handlebars.registerHelper('eachEven', function(arr, scope) {
   if ( arr && arr.length > 0 ) {
     var buffer = "";
@@ -702,21 +722,19 @@ Handlebars.registerHelper('is_odd', function(value, scope) {
   }
 })
 
-Handlebars.registerHelper('currency', function(value, ctx, scope) {
+Handlebars.registerHelper('currency', function(value, scope) {
 
   var context = scope.data.root;
-  console.log("CONTEXT", context, scope)
-  //var context = ctx?(ctx.cart?ctx:ctx.root.cart?ctx.root:this):this
 
-  if ( context.cart === undefined ) {
-    console.error('Contexts: ', context, this, ctx)
+  if ( context.$cart === undefined ) {
+    console.error('Contexts: ', context, this)
     throw new Error('Cart not found in current context.')
   }
   if ( value === undefined ) {
     return '';
   }
 
-  return context.cart.storeAdapter.formatCurrency(value)
+  return context.$cart.storeAdapter.formatCurrency(value)
 })
 
 module.exports = {
