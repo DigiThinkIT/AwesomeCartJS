@@ -141,9 +141,9 @@ class Feed extends EventEmitter {
     var args = sargs(arguments,
       {arg: 'cart', required: 1},
       {arg: 'name', required: 1},
-      {arg: 'options', merge: { filters: [] }}
+      {arg: 'options', default: {}}
     )
-
+    
     this.cart = args.cart
     this.name = args.name
     try {
@@ -151,7 +151,8 @@ class Feed extends EventEmitter {
         { arg: 'dataSource', required: 1 },
         { arg: 'idField', default: 'id' },
         { arg: 'container', required: 1 },
-        { arg: 'tpl', required: 1 }
+        { arg: 'tpl', required: 1 },
+        { arg: 'filters', default: []}
       );
     } catch(err) {
       //Error.captureStackTrace(err, Feed);
@@ -381,6 +382,7 @@ class AwesomeCart extends EventEmitter {
     options = sargs(options,
       { arg: 'dataSource', default: this.storeAdapter.fetchProducts.bind(this.storeAdapter) },
       { arg: 'idField', default: 'sku' },
+      { arg: 'filters' },
       { arg: 'container' },
       { arg: 'tpl' }
     )
@@ -398,6 +400,7 @@ class AwesomeCart extends EventEmitter {
     options = sargs(options,
       { arg: 'dataSource', default: this.fetchCartItems.bind(this) },
       { arg: 'idField', default: 'id' },
+      { arg: 'filters' },
       { arg: 'container' },
       { arg: 'tpl' }
     )
