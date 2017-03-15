@@ -4,7 +4,7 @@
  */
 
 const {log, error} = require('./debug');
-const {sargs, hasClass, addClass} = require('./utils');
+const {sargs, hasClass, addClass, hasAttr, setAttr, getAttr, debug} = require('./utils');
 const EventEmitter = require('events').EventEmitter;
 const xhr = require('xhr')
 const Promise = require('BlueBird')
@@ -36,7 +36,18 @@ class StoreAdapter extends EventEmitter {
   fetchProducts(tags, terms, start, limit) { return null; }
   fetchCartSession() { return null; }
   sessionAction(action, data) { return null; }
+  /**
+   * This is an optional method to implement js based templates from your own
+   * backend. The returning value should be a BlueBird promise.
+   */
   loadTemplate(name) { return null; }
+  /**
+   * Used when the cart needs to be validate before checkout.
+   * This method can be used as an opportunity to further modify cart data and
+   * submit checkout request to the server on validation.
+   * Return null on success or any other object with error information.
+   */
+  validate() {}
 }
 
 /**
@@ -143,7 +154,7 @@ class Feed extends EventEmitter {
       {arg: 'name', required: 1},
       {arg: 'options', default: {}}
     )
-    
+
     this.cart = args.cart
     this.name = args.name
     try {
@@ -230,7 +241,7 @@ class Feed extends EventEmitter {
     var container = this.container;
 
     if ( !container ) {
-      throw new Error('Invalid container')
+      throw new Error('Invalid container for feed "'+this.name+'"')
     }
 
     while(container.hasChildNodes()) {
@@ -416,6 +427,27 @@ class AwesomeCart extends EventEmitter {
     })
   }
 
+  _onFromIdChange(el, btn, e) {
+    setAttr(btn, 'data-awc-id', el.value);
+  }
+
+  _onOptionElChange(el, data, e) {
+    // build hash from selectors in the order specified
+    var optionHash = [];
+    for(var i = 0; i < data.selectors.length; i++) {
+      var selector = data.selectors[i];
+      var elems = document.querySelectorAll(selector)
+      if ( elems.length > 0 ) {
+        var optionEl = elems[0];
+        optionHash.push(optionEl.value)
+      }
+    }
+    var optionHash = optionHash.join(',')
+    var sku = data.hashes[optionHash]
+    // update sku on add to cart button
+    setAttr(data.btn, 'data-id', sku)
+  }
+
   /**
    * Updates click event references and overall UI handling
    */
@@ -426,6 +458,38 @@ class AwesomeCart extends EventEmitter {
       if ( !hasClass(btn, 'awc-bound') ) {
         btn.addEventListener('click', this._onAddToCartClick.bind(this))
         addClass(btn, 'awc-bound')
+        // track id value from selector and update this btn data-awc-id value
+        // on changes
+        if ( hasAttr(btn, 'data-awc-id-from') ) {
+          var fromSelector = getAttr(btn, 'data-awc-id-from');
+          var fromEl = document.querySelectorAll(fromSelector);
+          if ( fromEl.length > 0 ) {
+            fromEl = fromEl[0];
+            fromEl.addEventListener('change', this._onFromIdChange.bind(this, fromEl, btn));
+          }
+        }
+
+        if ( hasAttr(btn, 'data-awc-options') ) {
+          var optionData = {
+            selectors: getAttr(btn, 'data-awc-options-selectors').split(',').filter((n) => { return n != undefined && n != "" }),
+            hashes: JSON.parse(getAttr(btn, 'data-awc-options-hashes')),
+            btn: btn
+          }
+
+          for(var i = 0; i < optionData.selectors.length; i++) {
+            var selector = optionData.selectors[i];
+
+            // find this option element
+            var elems = document.querySelectorAll(selector)
+            if ( elems.length > 0 ) {
+              var optionEl = elems[0];
+              optionEl.addEventListener('change', this._onOptionElChange.bind(this, optionEl, optionData))
+            }
+          }
+
+          // trigger change event to make sure our sku ids are set for default selections
+          this._onOptionElChange.bind(this, optionEl, optionData)();
+        }
       }
     }
 
@@ -447,17 +511,22 @@ class AwesomeCart extends EventEmitter {
     if ( options && options instanceof String ) {
       options = queryString.parse(options)
     }
+    console.log(sku)
     this.addToCart(sku, qty, options)
   }
 
   _onRemoveFromCartClick(e) {
-    var btn = e.target;
-    var id = btn.dataset.id;
-    this.removeFromCart(id)
-      .catch((err) => {
-        console.dir(btn, id, btn.dataset)
-        console.error(err)
-      })
+    debug.group("On Remove From Cart", () => {
+      var btn = e.target;
+      var id = btn.dataset.id;
+      debug.info("Btn Element: ", btn);
+      debug.info("Data set id %s", id);
+      this.removeFromCart(id)
+        .catch((err) => {
+          console.dir(btn, id, btn.dataset)
+          console.error(err)
+        })
+    })
   }
 
   listProducts() {
@@ -471,6 +540,10 @@ class AwesomeCart extends EventEmitter {
     return new Promise(function(resolve, reject) {
 
     });
+  }
+
+  validate() {
+    this.storeAdapter.validate();
   }
 
   /**
@@ -512,11 +585,12 @@ class AwesomeCart extends EventEmitter {
             { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
           )
         }
-
         return false
       })
       .then(() => {
         this._emitUpdated()
+        debug.table(this._cart);
+        return true
       })
   }
 
@@ -529,29 +603,19 @@ class AwesomeCart extends EventEmitter {
           return item.id == id;
         })
 
-        if ( this.options.sessionStoreUrl ) {
-          xhr.post({
-            url: this.options.sessionStoreUrl,
-            json: {
-              action: 'removeFromCart',
-              data: id
-            }
-          }).then((resp) => {
-            if ( resp.statusCode != 200 ) {
-              reject(resp.statusCode)
-            } else {
-              if ( resp.body.success ) {
-                this._emitUpdated()
-                resolve()
-              } else {
-                reject(resp.message)
-              }
-            }
-          })
-        } else {
-          this._emitUpdated()
-          resolve()
-        }
+        debug.info("Sending removeFromCart request");
+        return this.storeAdapter.sessionAction(
+          'removeFromCart',
+          { id: id }
+        ).then(() => {
+          debug.info("Server returned success");
+          this._emitUpdated();
+          debug.table(this._cart);
+          return true;
+        }).catch((err) => {
+          debug.error(err);
+        })
+
       }
     })
   }
@@ -678,13 +742,41 @@ function delayedTpl(id, tpl_name, obj) {
     .then((tpl) => {
       var html = tpl(obj)
       var container = document.getElementById(id)
-      container.innerHTML = html
-      container.className = "awc-placeholder loaded"
-      return true
+      if ( container ) {
+        container.innerHTML = html
+        container.className = "awc-placeholder loaded"
+        return true
+      } else {
+        return false
+      }
     })
 
     obj.$parent.updateWaitFor(tpl_promise)
 }
+
+Handlebars.registerHelper("eq", function(left, right, scope) {
+  return left == right;
+})
+
+Handlebars.registerHelper("ne", function(left, right, scope) {
+  return left != right;
+})
+
+Handlebars.registerHelper("gt", function(left, right, scope) {
+  return left > right;
+})
+
+Handlebars.registerHelper("lt", function(left, right, scope) {
+  return left < right;
+})
+
+Handlebars.registerHelper("ge", function(left, right, scope) {
+  return left >= right;
+})
+
+Handlebars.registerHelper("le", function(left, right, scope) {
+  return left <= right;
+})
 
 Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
   var id = awc.uuid.v4()
@@ -692,6 +784,14 @@ Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
   obj.$parent = scope.data.root.$parent
   delayedTpl(id, tpl_name, obj)
   return '<div id="'+id+'" class="awc-placeholder loading"></div>';
+})
+
+Handlebars.registerHelper("json", function(value, scope) {
+  return JSON.stringify(value)
+})
+
+Handlebars.registerHelper('cssEscape', function(value, scope) {
+  return value.replace(/\s/g, '_')
 })
 
 Handlebars.registerHelper('eachEven', function(arr, scope) {
@@ -741,6 +841,7 @@ Handlebars.registerHelper('currency', function(value, scope) {
 })
 
 module.exports = {
+  debug: debug,
   AwesomeCart: AwesomeCart,
   DemoStoreaAdapter: DemoStoreaAdapter,
   StoreAdapter: StoreAdapter,

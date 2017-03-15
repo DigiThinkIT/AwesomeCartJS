@@ -1,9 +1,16 @@
 ## Awesome Cart JS
 
-A simplified shopping cart front end javascript library. Awc does not have a backend, instead it relies on adapters to fetch products and place orders.
+A simple shopping cart front end javascript library. Awc does not have a backend, instead it relies on adapters to fetch products and place orders.
 The goal of Awc is to quickly deploy a shopping cart front end with little to no changes to your existing website code base while maintaining modern cart flexibility on any page you would like to sell a product from.
 
 ### Getting Started
+
+On its own awcjs doesn't do much, the source includes a demo adapter to show how
+setting up a simple cart works. Currently there is only one other adapter which
+works with awcjs(AWC for ErpNext), however build adapters should not be too difficult
+a task if you know your backends well enough.
+
+### Building a Catalog page
 
 Awc requires at least one empty element in your page which it will use to feed
 products listing.
@@ -33,7 +40,7 @@ Finally define the product feed and bootstrap the cart.
   // DemoStoreaAdapter class
   cart.newProductFeed('products', {
     container: '#products',
-    product_template: awc.getTemplate('product_template.html') // define a handlebars template location
+    product_template: cart.template('product_template.html') // define a handlebars template location
   })
 
   // kickoff the cart logic
@@ -44,7 +51,7 @@ Finally define the product feed and bootstrap the cart.
 ### Product Templates
 
 AWC uses the handlebars templating library to ease building of product listings.
-You can simply reference a template using awc.getTemplate() function to define what
+You can simply reference a template using awc.getTemplate() or cart.template() functions to define what
 template to use when a product feed is being refreshed.
 
 As of this time the template context is the same object as received from the store adapter:
@@ -55,15 +62,19 @@ As of this time the template context is the same object as received from the sto
   "name": "Product Name",
   "description": "Product Description",
   "price": 100,
-  "tags": ["tag1", "tag2", "etc..."]
+  "tags": ["tag1", "tag2", "etc..."],
+  "details": {}
 }
 ```
 
 ### adapters
 
-If you don't provide an adapter instance during the creation of awc a DemoStoreAdapter instance will be created and assigned to your cart instance.
+If you don't provide an adapter instance during the creation of awcjs a DemoStoreAdapter instance will be created and assigned to your cart instance.
 
-TODO: list available adapters
+Currently only AWC for ErpNext adapter exists. The Adapter API is quite small and easy
+to extend, so new carts or existing backends should be relatively easy to hook up.
+
+TODO: Explain the adapter API concepts
 
 ## API
 
@@ -113,7 +124,7 @@ Instantiates a product feed
 -   `cart`  string     The AwesomeCart instance
 -   `name`  string     The feed name
 -   `options`  object  Feed options
--   `params` **...any** 
+-   `params` **...any**
 
 ### CartFeed
 
@@ -130,7 +141,7 @@ Instantiates a product feed
 -   `cart`  string     The AwesomeCart instance
 -   `name`  string     The feed name
 -   `options`  object  Feed options
--   `params` **...any** 
+-   `params` **...any**
 
 ### AwesomeCart
 
