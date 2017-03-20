@@ -3,7 +3,91 @@
  * @module utils
  */
 
+ var xhrLib = {
+   get: function(data, callback) {
+    var xhr = new XMLHttpRequest();
+
+    if ( typeof data == "string" ) {
+      data = {
+        url: data
+      }
+    }
+
+    xhr.open('GET', data.url);
+
+    if ( data.headers ) {
+      for(var k in data.headers) {
+        xhr.setRequestHeader(k, data.headers[k]);
+      }
+    }
+    xhr.onload = function() {
+        if (xhr.status === 200) {
+          var response = xhr.responseText;
+          if ( data.type && data.type.toLowerCase() == 'json' ) {
+            response = JSON.parse(xhr.responseText);
+          }
+          callback(null, { body: response, xhr: xhr});
+        }
+        else {
+          callback(xhr.status, null, xhr);
+        }
+    };
+    xhr.send();
+  },
+  post: function(data, callback) {
+    var xhr = new XMLHttpRequest();
+
+    if ( typeof data == "string" ) {
+      data = {
+        url: data
+      }
+    }
+
+    xhr.open('POST', data.url);
+    if ( !data.headers ) { data.headers = {} }
+    if ( 'Content-Type' in data.headers ) {
+      data.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+
+    for(var k in data.headers) {
+      xhr.setRequestHeader(k, data.headers[k]);
+    }
+
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        var response = xhr.responseText;
+        if ( data.type && data.type.toLowerCase() == 'json' ) {
+          response = JSON.parse(xhr.responseText);
+        }
+        callback(null, { body: response, xhr: xhr });
+      }
+      else {
+        callback(xhr.status, null, xhr);
+      }
+    };
+
+    if ( typeof data.data == 'object') {
+      xhr.send(JSON.stringify(data.data));
+    } else {
+      xhr.send(encodeURI(data.data));
+    }
+  }
+}
+
 module.exports = {
+  xhr: xhrLib,
+
+  /**
+   * Low quality guid using Math.random.
+   * Only use if you are sure you don't need high quality randomness
+   */
+  uuid: function() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
+      return v.toString(16);
+    });
+  },
+
   sargs: function() {
     // usage:
     //   sargs(arguments, {arg: 'arg1', default: false}, {arg: 'arg2', required: 1})

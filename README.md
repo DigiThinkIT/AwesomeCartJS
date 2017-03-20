@@ -88,6 +88,50 @@ TODO: Explain the adapter API concepts
 
 The base store adapter class. All adapters are required to extend from this class.
 
+#### fetchProducts
+
+Implements feting products from a backend.
+
+**Parameters**
+
+-   `tags`  
+-   `terms`  
+-   `start`  
+-   `limit`  
+
+#### fetchCartSession
+
+Implements session fetching from a backend
+
+#### sessionAction
+
+Session actions sent to a backend.
+Expected actions are:
+
+-   addToCart
+-   removeFromCart
+
+**Parameters**
+
+-   `action`  
+-   `data`  
+
+#### loadTemplate
+
+This is an optional method to implement js based templates from your own
+backend. The returning value should be a BlueBird promise.
+
+**Parameters**
+
+-   `name`  
+
+#### validate
+
+Used when the cart needs to be validate before checkout.
+This method can be used as an opportunity to further modify cart data and
+submit checkout request to the server on validation.
+Return null on success or any other object with error information.
+
 ### DemoStoreaAdapter
 
 **Extends StoreAdapter**
@@ -124,7 +168,7 @@ Instantiates a product feed
 -   `cart`  string     The AwesomeCart instance
 -   `name`  string     The feed name
 -   `options`  object  Feed options
--   `params` **...any**
+-   `params` **...any** 
 
 ### CartFeed
 
@@ -141,13 +185,17 @@ Instantiates a product feed
 -   `cart`  string     The AwesomeCart instance
 -   `name`  string     The feed name
 -   `options`  object  Feed options
--   `params` **...any**
+-   `params` **...any** 
 
 ### AwesomeCart
 
 **Extends EventEmitter**
 
 The main cart class. All managing of shopping cart happens here.
+
+#### totals
+
+Returns stored totals. These values should be set and calculated by the store adapter.
 
 #### totalItems
 
@@ -207,3 +255,8 @@ the cart is populated from a past session. Also feeds are initialized here
 to start consuming product listing and cart data.
 
 ### utils
+
+#### uuid
+
+Low quality guid using Math.random.
+Only use if you are sure you don't need high quality randomness

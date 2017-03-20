@@ -9,10 +9,10 @@
     "docs-html": "documentation build src/main.js -f html -o docs",
     "docs-readme": "documentation readme src/main.js --section=API",
     "dist": "npm run dist-bundle && npm run dist-sa && npm run docs-html && npm run docs-readme",
-    "dist-bundle": "browserify src/main.js -o dist/awc.bundle.js -d -t [ babelify --presets [ es2015 react ] ]",
-    "watch-bundle": "watchify src/main.js -o dist/awc.bundle.js -d -v -t [ babelify --presets [ es2015 react ] ]",
-    "dist-sa": "browserify src/main.js -o dist/awc.standalone.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc",
-    "watch-sa": "watchify src/main.js -o dist/awc.standalone.js -d -v -t [ babelify --presets [ es2015 react ] ] --standalone awc",
+    "dist-bundle": "browserify src/main.js -o dist/awc.bundle.js -d -t [ babelify --presets [ es2015 react ] ]  --no-comments",
+    "watch-bundle": "watchify src/main.js -o dist/awc.bundle.js -d -v -t [ babelify --presets [ es2015 react ] ]  --no-comments",
+    "dist-sa": "browserify src/main.js -o dist/awc.standalone.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc  --no-comments",
+    "watch-sa": "watchify src/main.js -o dist/awc.standalone.js -d -v -t [ babelify --presets [ es2015 react ] ] --standalone awc  --no-comments",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -40,10 +40,9 @@
   },
   "dependencies": {
     "bluebird": "^3.4.7",
+    "eventemitter2": "^3.0.2",
     "handlebars": "^4.0.6",
     "lodash": "^4.17.4",
-    "node-uuid": "^1.4.7",
-    "query-string": "^4.3.1",
-    "xhr": "^2.3.3"
+    "query-string": "^4.3.1"
   }
 }

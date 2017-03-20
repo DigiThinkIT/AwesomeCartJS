@@ -4,14 +4,14 @@
  */
 
 const {log, error} = require('./debug');
-const {sargs, hasClass, addClass, hasAttr, setAttr, getAttr, debug} = require('./utils');
-const EventEmitter = require('events').EventEmitter;
-const xhr = require('xhr')
+const {sargs, hasClass, addClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
 const Handlebars = require('handlebars')
 const queryString = require('query-string')
-const uuid = require('node-uuid')
+//const uuid = require('node-uuid')
 const _ = require('lodash')
+
 xhr.get = Promise.promisify(xhr.get)
 xhr.post = Promise.promisify(xhr.post)
 
@@ -21,6 +21,9 @@ xhr.post = Promise.promisify(xhr.post)
 class StoreAdapter extends EventEmitter {
   constructor() {
     super()
+    this._totals = {
+      grand_total: 0
+    }
   }
 
   init() {
@@ -29,12 +32,27 @@ class StoreAdapter extends EventEmitter {
     })
   }
 
+  getTotals() { return this._totals; }
   getCurrency() { return null; }
   getCurrencySymbol() { return null; }
   formatCurrency(currency) { return null; }
   getProductBySKU(sku, detailed) { return null; }
+
+  /**
+   * Implements feting products from a backend.
+   */
   fetchProducts(tags, terms, start, limit) { return null; }
+
+  /**
+   * Implements session fetching from a backend
+   */
   fetchCartSession() { return null; }
+  /**
+   * Session actions sent to a backend.
+   * Expected actions are:
+   *  - addToCart
+   *  - removeFromCart
+   */
   sessionAction(action, data) { return null; }
   /**
    * This is an optional method to implement js based templates from your own
@@ -331,6 +349,13 @@ class AwesomeCart extends EventEmitter {
   }
 
   /**
+   * Returns stored totals. These values should be set and calculated by the store adapter.
+   */
+  get totals() {
+    return this.storeAdapter.getTotals();
+  }
+
+  /**
    * Returns total line items in the cart.
    * @return int
    */
@@ -567,7 +592,7 @@ class AwesomeCart extends EventEmitter {
             product: product,
             qty: args.qty,
             options: args.options,
-            id: uuid.v1(),
+            id: uuid(),
             unit: product.price,
             total: product.price * args.qty
           }
@@ -583,7 +608,13 @@ class AwesomeCart extends EventEmitter {
           return this.storeAdapter.sessionAction(
             'addToCart',
             { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
-          )
+          ).then((resp) => {
+            item.id = resp.id
+            item.qty = resp.qty
+            item.sku = resp.sku
+            item.options = resp.options
+            return resp;
+          })
         }
         return false
       })
@@ -779,7 +810,7 @@ Handlebars.registerHelper("le", function(left, right, scope) {
 })
 
 Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
-  var id = awc.uuid.v4()
+  var id = awc.uuid()
   obj.$cart = scope.data.root.$cart
   obj.$parent = scope.data.root.$parent
   delayedTpl(id, tpl_name, obj)
