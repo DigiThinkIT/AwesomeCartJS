@@ -3,8 +3,8 @@
  * @module utils
  */
 
- var xhrLib = {
-   get: function(data, callback) {
+var xhrLib = {
+  get: function(data, callback) {
     var xhr = new XMLHttpRequest();
 
     if ( typeof data == "string" ) {
@@ -72,6 +72,7 @@
       xhr.send(encodeURI(data.data));
     }
   }
+
 }
 
 module.exports = {

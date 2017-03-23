@@ -229,19 +229,27 @@ class Feed extends EventEmitter {
           count++;
         }
 
-        var obj = { items: this.items, is_empty: count == 0, $cart: this.cart, $parent: this }
+        var obj = {
+          items: this.items,
+          is_empty: count == 0,
+          $cart: this.cart,
+          $parent: this
+        }
         var html = tpl(obj)
         this.container.insertAdjacentHTML('beforeend', html)
+        this.emit('tpl-inserted')
 
         if ( this._waitFor.length > 0 ) {
           return Promise.join.apply(Promise, this._waitFor)
             .then(() => {
               this._waitFor = [] // reset wait list
               this.emit('updated', this, this.products)
+              this.emit('tpl-ready')
               return true;
             })
         } else {
           this.emit('updated', this, this.products)
+          this.emit('tpl-ready')
           return true;
         }
       })
@@ -568,7 +576,7 @@ class AwesomeCart extends EventEmitter {
   }
 
   validate() {
-    this.storeAdapter.validate();
+    this.storeAdapter.validate.apply(this.storeAdapter, arguments);
   }
 
   /**
@@ -669,17 +677,32 @@ class AwesomeCart extends EventEmitter {
     .then((data) => {
       var tpl = template.value();
       var wait = []
-      var html = tpl(Object.assign({$cart: this.cart, $parent: { updateWaitFor: function(w) { wait.push(w) } } }, data))
+      var ev = new EventEmitter({});
+      var html = tpl(Object.assign({
+          $cart: this.cart,
+          $parent: {
+            updateWaitFor: function(w) {
+              wait.push(w)
+            },
+            on: this.on.bind(this)
+          }
+        }, data))
       var container = (typeof selector == 'string')?document.querySelector(selector):selector;
       container.innerHTML = html
+      console.log("emit tpl-inserted")
+      this.emit('tpl-inserted');
 
       // allows inserting extra promises into chain before resolving
       if ( wait.length > 0 ) {
         return Promise.join.apply(Promise, wait)
           .then(() => {
+            console.log('emit tpl-ready');
+            this.emit('tpl-ready');
             return true;
           })
       } else {
+        console.log('emit tpl-ready');
+        this.emit('tpl-ready');
         return true;
       }
     })
@@ -809,6 +832,14 @@ Handlebars.registerHelper("le", function(left, right, scope) {
   return left <= right;
 })
 
+Handlebars.registerHelper("or", function(left, right, scope) {
+  return left || right;
+})
+
+Handlebars.registerHelper("and", function(left, right, scope) {
+  return left && right;
+})
+
 Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
   var id = awc.uuid()
   obj.$cart = scope.data.root.$cart
@@ -831,6 +862,7 @@ Handlebars.registerHelper('eachEven', function(arr, scope) {
     for(var i = 0; i < arr.length; i++) {
       var item = arr[i]
       item.$index = i
+      item.$is_first = i==0?1:0;
       item.$is_even = (i % 2) == 0
       buffer += scope.fn(item)
     }
@@ -911,3 +943,30 @@ module.exports = {
 
 // To be deprecated
 module.exports.getTemplate = module.exports.loadTemplate
+
+var _required = {};
+module.exports.require = function(url) {
+  if ( url in _required ) {
+    return _required;
+  }
+
+  _required[url] = module.exports.get(url)
+    .then((data) => {
+      var el, ext = url.split('.').splice(-1);
+      if ( ext == "js" ) {
+        el = document.createElement('script');
+      } else if ( ext == "css" ) {
+        el = document.createElement('style');
+      } else if ( ext == "json" ) {
+        data = JSON.parse(data.body);
+      }
+
+      if ( el ) {
+        el.appendChild(document.createTextNode(data.body));
+        document.getElementsByTagName('head')[0].appendChild(el);
+      }
+      return data;
+    })
+
+  return _required[url];
+}
