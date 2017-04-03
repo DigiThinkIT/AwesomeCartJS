@@ -69,6 +69,93 @@ class StoreAdapter extends EventEmitter {
 }
 
 /**
+ * Handlebars wrapper to add custom features to our templates
+ */
+class Template extends EventEmitter {
+
+  constructor(tpl, cart) {
+    super();
+
+    this._cart = cart;
+    this._waitFor = [];
+    this.resource = tpl;
+  }
+
+  promiseReady() {
+    return new Promise((resolve, reject) => {
+      this.resource.then(() => {
+        resolve(this);
+        return true;
+      })
+      .catch((err) => {
+        reject(err);
+        return false;
+      })
+    })
+  }
+
+  updateWaitFor(prm) {
+    this._waitFor.push(prm)
+  }
+
+  beginRender(context) {
+    var tpl = this.resource.value();
+    this.emit('tpl-start-render');
+
+    return tpl(Object.assign({
+      $cart: this._cart,
+      $parent: this
+    },context))
+  }
+
+  endRender() {
+    if ( this._waitFor.length > 0 ) {
+      return Promise.join.apply(Promise, this._waitFor)
+        .then(() => {
+          this._waitFor = [] // reset wait list
+          this.emit('tpl-end-render');
+          this.emit('tpl-ready')
+          return true;
+        })
+    }
+
+    return new Promise((resolve, reject) => {
+      this.emit('tpl-end-render');
+      this.emit('tpl-ready')
+      resolve(true);
+    });
+
+  }
+
+  isFulfilledPassthrough(data) {
+    var base = this;
+    return (result) => {
+      if ( base.resource.isFulfilled() ) {
+        // if template is ready just pass along results
+        if ( data ) {
+          return data;
+        }
+
+        return result;
+      } else {
+        // wait for template to load
+        return new Promise((resolve, reject) => {
+          base.resource
+            .then(() => {
+              if ( data ) {
+                resolve(data);
+              } else {
+                resolve(result)
+              }
+            })
+            .catch((err) => { reject(err) })
+        })
+      }
+    }
+  }
+}
+
+/**
  * A demo store adapter with hardcoded products to demonstrate how adapters work.
  */
 class DemoStoreaAdapter extends StoreAdapter {
@@ -205,24 +292,11 @@ class Feed extends EventEmitter {
     this.emit('update', this)
 
     this.options.dataSource(this.filters)
-      .then((result) => {
-        if ( this.options.tpl.isFulfilled() ) {
-          // if template is ready just pass along results
-          return result;
-        } else {
-          // wait for template to load
-          return new Promise((resolve, reject) => {
-            this.options.tpl
-              .then(() => { resolve(result) })
-              .catch((err) => { reject(err) })
-          })
-        }
-      })
+      .then(this.options.tpl.isFulfilledPassthrough())
       .then((result) => {
         this.items = {}
         this.empty()
 
-        var tpl = this.options.tpl.value();
         var count = 0;
         for(var i in result) {
           this.items[result[i][this.options.idField]] = result[i]
@@ -231,27 +305,17 @@ class Feed extends EventEmitter {
 
         var obj = {
           items: this.items,
-          is_empty: count == 0,
-          $cart: this.cart,
-          $parent: this
+          is_empty: count == 0
         }
-        var html = tpl(obj)
+        var html = this.options.tpl.beginRender(obj)
         this.container.insertAdjacentHTML('beforeend', html)
         this.emit('tpl-inserted')
 
-        if ( this._waitFor.length > 0 ) {
-          return Promise.join.apply(Promise, this._waitFor)
-            .then(() => {
-              this._waitFor = [] // reset wait list
-              this.emit('updated', this, this.products)
-              this.emit('tpl-ready')
-              return true;
-            })
-        } else {
-          this.emit('updated', this, this.products)
-          this.emit('tpl-ready')
-          return true;
-        }
+        this.options.tpl.once('tpl-end-render', () => {
+          this.emit('updated', this, this.products);
+        })
+
+        return this.options.tpl.endRender();
       })
       .catch((err) => {
         console.error(err)
@@ -382,7 +446,16 @@ class AwesomeCart extends EventEmitter {
   get totalCount() {
     var count = 0;
     for(var i in this._cart) {
-      count += this._cart[i].qty || 0
+      var consider = true;
+
+      // don't count sub items
+      if ( this._cart[i].options && this._cart[i].options.subgroup ) {
+        consider = false;
+      }
+
+      if ( consider ) {
+        count += this._cart[i].qty || 0
+      }
     }
 
     return count
@@ -408,11 +481,13 @@ class AwesomeCart extends EventEmitter {
     var tpl = this.storeAdapter.loadTemplate(name)
     if ( !tpl ) {
       tpl = module.exports.loadTemplate(name)
+    } if ( tpl.constructor == Template ) {
+      return tpl;
     } else {
       tpl = module.exports.loadTemplate(tpl)
     }
 
-    return tpl
+    return new Template(tpl, this);
   }
 
   /**
@@ -455,7 +530,75 @@ class AwesomeCart extends EventEmitter {
 
   fetchCartItems(filters) {
     return new Promise((resolve, reject) => {
-      resolve(this._cart)
+      // build item list considering grouped items
+      var cart_items = []
+      var grouped_items = {}
+      for(var i in this._cart) {
+        var item = this._cart[i];
+        var item_tmp = {
+          id: item.id,
+          qty: item.qty,
+          unit: item.unit,
+          total: item.total,
+          options: item.options,
+          product: {
+            name: item.product.name,
+            imageUrl: item.product.imageUrl
+          },
+          subgroups: []
+        }
+
+        // add item as master item
+        if ( item.options && item.options.group && !item.options.subgroup ) {
+          // copy any groups created before this master item was found
+          var subgroups_list = null;
+          if ( item.options.group in grouped_items ) {
+            subgroups_list = grouped_items[item.options.group].subgroups;
+          }
+
+          // assign master item
+          grouped_items[item.options.group] = item_tmp;
+
+          // copy groups found before this master item was created
+          if ( subgroups_list ) {
+            item_tmp.subgroups = subgroups_list;
+          }
+        }
+
+        // add subgroup items to master item
+        if ( item.options && item.options.group && item.options.subgroup ) {
+          // create the master item object if not found
+          if ( !(item.options.group in grouped_items) ) {
+            grouped_items[item.options.group] = { subgroups: [] }
+          }
+
+          // find subgroup by name
+          var subgroup = null;
+          for(var gidx in grouped_items[item.options.group].subgroups) {
+            if ( grouped_items[item.options.group].subgroups[gidx].name == item.options.subgroup ) {
+              subgroup = grouped_items[item.options.group].subgroups[gidx];
+              break;
+            }
+          }
+
+          // if no subgroup is found create it
+          if ( !subgroup ) {
+            subgroup = {
+              name: item.options.subgroup,
+              items: []
+            }
+            grouped_items[item.options.group].subgroups.push(subgroup);
+          }
+
+          // finaly add subgroup item into master item
+          subgroup.items.push(item_tmp);
+
+        } else {
+          cart_items.push(item_tmp)
+        }
+      }
+
+      resolve(cart_items)
       return null;
     })
   }
@@ -586,45 +729,85 @@ class AwesomeCart extends EventEmitter {
    * @param options object  Customization options associated with product
    */
   addToCart() {
-    var args = sargs(arguments,
-      { arg: 'sku', required: 1 },
-      { arg: 'qty', default: 1 },
-      { arg: 'options', default: {}}
-    )
+    var base = this;
+    // check if passing an array first
+    var in_args = [];
+    if ( arguments[0].constructor === Array ) {
+      in_args = arguments[0];
+    } else {
+      in_args = [Array.from(arguments)];
+    }
 
-    return this.storeAdapter.getProductBySKU(args.sku)
-      .then((product) => {
-        if ( product ) {
+    var items = [];
+    var payload = [];
+    var get_sku_promises = [];
+    for(var in_args_idx in in_args) {
+      var arg_item = in_args[in_args_idx];
 
-          var item = {
-            product: product,
-            qty: args.qty,
-            options: args.options,
-            id: uuid(),
-            unit: product.price,
-            total: product.price * args.qty
-          }
+      var args = sargs(arg_item,
+        { arg: 'sku', required: 1 },
+        { arg: 'qty', default: 1 },
+        { arg: 'options', default: {}}
+      );
 
-          this._cart.push(item)
-          return item;
-        }
+      // isolate to keep references from messing with each other
+      (function(args, get_sku_promises) {
+        // fetch all products info before sending to adapter
+        get_sku_promises.push(base.storeAdapter.getProductBySKU(args.sku)
+          .then((product) => {
+            if ( product ) {
 
-        return false
-      })
-      .then((item) => {
-        if (item) {
-          return this.storeAdapter.sessionAction(
-            'addToCart',
-            { id: item.id, qty: item.qty, sku: item.product.sku, options: item.options }
-          ).then((resp) => {
-            item.id = resp.id
-            item.qty = resp.qty
-            item.sku = resp.sku
-            item.options = resp.options
-            return resp;
+              var item;
+
+              items.push(item = {
+                product: product,
+                qty: args.qty,
+                options: args.options,
+                id: uuid(),
+                unit: product.price,
+                total: product.price * args.qty
+              })
+
+              payload.push({
+                id: item.id,
+                qty: item.qty,
+                sku: item.product.sku,
+                options: item.options || {}
+              })
+
+              base._cart.push(item)
+              return true;
+            }
+
+            return false
+          }));
+      }(args, get_sku_promises));
+
+    }
+
+    // wait for all sku promises to resolve
+    return Promise.join.apply(Promise, get_sku_promises)
+      .then(() => {
+        // now send bulk action
+        return this.storeAdapter.sessionAction('addToCart', payload)
+          .then((resp) => {
+            for(var i in resp) {
+              for(var j in items) {
+                if ( items[j].id == resp[i].old_id ) {
+                  // update local cart info with adapter data
+                  items[j].id = resp[i].id;
+                  items[j].qty = resp[i].qty;
+                  items[j].sku = resp[i].sku;
+                  items[j].options = resp[i].options;
+                  break;
+                }
+              }
+            }
+            return resp
           })
-        }
-        return false
+          .catch((err) => {
+            console.error("Error adding items to cart", err);
+          })
       })
       .then(() => {
         this._emitUpdated()
@@ -646,7 +829,21 @@ class AwesomeCart extends EventEmitter {
         return this.storeAdapter.sessionAction(
           'removeFromCart',
           { id: id }
-        ).then(() => {
+        ).then((resp) => {
+          for(var resp_idx in resp) {
+            var id = resp[resp_idx];
+            var remove_me = null;
+            for(var cart_idx in this._cart) {
+              if ( this._cart[cart_idx].id == id ) {
+                remove_me = this._cart[cart_idx].id
+                break;
+              }
+            }
+
+            if ( remove_me !== null ) {
+              delete this._cart[remove_me];
+            }
+          }
           debug.info("Server returned success");
           this._emitUpdated();
           debug.table(this._cart);
@@ -664,47 +861,24 @@ class AwesomeCart extends EventEmitter {
   }
 
   applyTpl(selector, tpl, data) {
-    var template = tpl;
-    return new Promise((resolve, reject) => {
-      if ( tpl.isFulfilled() ) {
-        // if template is ready just pass along data
-        resolve(data);
-      } else {
-        // wait for template to load
-        return tpl.then(() => { return data; })
-      }
-    })
-    .then((data) => {
-      var tpl = template.value();
+    console.log("applyTpl", arguments);
+    return tpl.promiseReady()
+    .then(() => {
       var wait = []
       var ev = new EventEmitter({});
-      var html = tpl(Object.assign({
-          $cart: this.cart,
-          $parent: {
-            updateWaitFor: function(w) {
-              wait.push(w)
-            },
-            on: this.on.bind(this)
-          }
-        }, data))
+      var html = tpl.beginRender(data)
       var container = (typeof selector == 'string')?document.querySelector(selector):selector;
       container.innerHTML = html
       console.log("emit tpl-inserted")
       this.emit('tpl-inserted');
 
-      // allows inserting extra promises into chain before resolving
-      if ( wait.length > 0 ) {
-        return Promise.join.apply(Promise, wait)
-          .then(() => {
-            console.log('emit tpl-ready');
-            this.emit('tpl-ready');
-            return true;
-          })
-      } else {
-        console.log('emit tpl-ready');
-        this.emit('tpl-ready');
-        return true;
-      }
+      // TODO: this shoudl be deprecated once new Template class is integrated
+      //       Remember to remove.
+      tpl.once('tpl-end-render', () => {
+        this.emit('tpl-ready')
+      })
+
+      return tpl.endRender()
     })
 
   }
@@ -792,16 +966,20 @@ class AwesomeCart extends EventEmitter {
 }
 
 function delayedTpl(id, tpl_name, obj) {
-  var tpl_promise = cart.template(tpl_name)
+  var t = cart.template(tpl_name);
+  console.log(cart.template(t))
+  var tpl_promise = t
+    .promiseReady()
     .then((tpl) => {
-      var html = tpl(obj)
+      var html = tpl.beginRender(obj)
       var container = document.getElementById(id)
       if ( container ) {
         container.innerHTML = html
         container.className = "awc-placeholder loaded"
-        return true
+
+        return tpl.endRender();
       } else {
-        return false
+        return false;
       }
     })
 
@@ -914,15 +1092,18 @@ module.exports = {
         // compile template and return
         return Handlebars.compile(resp.body)
       })
-    } else {
-      return url.then((resp) => {
-        if ( typeof resp == "string" ) {
-          return Handlebars.compile(resp)
-        } else {
-          return resp
-        }
-      })
+    } if ( url.contructor == Template ) {
+      url = url.resource;
     }
+
+    return url.then((resp) => {
+      if ( typeof resp == "string" ) {
+        return Handlebars.compile(resp)
+      } else {
+        return resp
+      }
+    })
+
   },
   parseHash: function() {
     var args = {},
@@ -938,7 +1119,8 @@ module.exports = {
   Promise: Promise,
   uuid: uuid,
   get: xhr.get,
-  post: xhr.post
+  post: xhr.post,
+  Template: Template
 }
 
 // To be deprecated
@@ -947,7 +1129,7 @@ module.exports.getTemplate = module.exports.loadTemplate
 var _required = {};
 module.exports.require = function(url) {
   if ( url in _required ) {
-    return _required;
+    return _required[url];
   }
 
   _required[url] = module.exports.get(url)
