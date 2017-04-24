@@ -132,6 +132,12 @@ This method can be used as an opportunity to further modify cart data and
 submit checkout request to the server on validation.
 Return null on success or any other object with error information.
 
+### Template
+
+**Extends EventEmitter**
+
+Handlebars wrapper to add custom features to our templates
+
 ### DemoStoreaAdapter
 
 **Extends StoreAdapter**
