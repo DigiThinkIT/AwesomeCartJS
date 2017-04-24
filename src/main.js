@@ -268,7 +268,8 @@ class Feed extends EventEmitter {
         { arg: 'idField', default: 'id' },
         { arg: 'container', required: 1 },
         { arg: 'tpl', required: 1 },
-        { arg: 'filters', default: []}
+        { arg: 'filters', default: []},
+				{ arg: 'sort', default: null }
       );
     } catch(err) {
       //Error.captureStackTrace(err, Feed);
@@ -293,13 +294,28 @@ class Feed extends EventEmitter {
 
     this.options.dataSource(this.filters)
       .then(this.options.tpl.isFulfilledPassthrough())
+			.then((result) => {
+				console.log("Sort?", this.options.sort)
+				for(var i in result) {
+					console.log(result[i].price);
+				}
+				if ( this.options.sort ) {
+					result = result.sort(this.options.sort);
+					for(var i in result) {
+						console.log(result[i].price);
+					}
+					return result;
+				}
+				return result;
+			})
       .then((result) => {
-        this.items = {}
+        this.items = [];
         this.empty()
 
         var count = 0;
         for(var i in result) {
-          this.items[result[i][this.options.idField]] = result[i]
+					this.items.push(result[i]);
+          //this.items[result[i][this.options.idField]] = result[i]
           count++;
         }
 
@@ -503,7 +519,8 @@ class AwesomeCart extends EventEmitter {
       { arg: 'idField', default: 'sku' },
       { arg: 'filters' },
       { arg: 'container' },
-      { arg: 'tpl' }
+      { arg: 'tpl' },
+			{ arg: 'sort', default: function(a, b) { return b.price - a.price; } }
     )
     try {
       this.options.feeds[name] = new ProductFeed(this, name, options)
@@ -687,7 +704,6 @@ class AwesomeCart extends EventEmitter {
     if ( options && options instanceof String ) {
       options = queryString.parse(options)
     }
-    console.log(sku)
     this.addToCart(sku, qty, options)
   }
 
@@ -740,6 +756,7 @@ class AwesomeCart extends EventEmitter {
 
     var items = [];
     var payload = [];
+    var items_added = [];
     var get_sku_promises = [];
     for(var in_args_idx in in_args) {
       var arg_item = in_args[in_args_idx];
@@ -795,10 +812,15 @@ class AwesomeCart extends EventEmitter {
               for(var j in items) {
                 if ( items[j].id == resp[i].old_id ) {
                   // update local cart info with adapter data
+
                   items[j].id = resp[i].id;
                   items[j].qty = resp[i].qty;
                   items[j].sku = resp[i].sku;
                   items[j].options = resp[i].options;
+
+                  if ( items[j].id != resp[i].old_id ) {
+                    items_added.push(items[j]);
+                  }
                   break;
                 }
               }
@@ -811,6 +833,7 @@ class AwesomeCart extends EventEmitter {
       })
       .then(() => {
         this._emitUpdated()
+        this.emit("after-add-to-cart", items_added)
         debug.table(this._cart);
         return true
       })
@@ -861,7 +884,6 @@ class AwesomeCart extends EventEmitter {
   }
 
   applyTpl(selector, tpl, data) {
-    console.log("applyTpl", arguments);
     return tpl.promiseReady()
     .then(() => {
       var wait = []
@@ -869,7 +891,6 @@ class AwesomeCart extends EventEmitter {
       var html = tpl.beginRender(data)
       var container = (typeof selector == 'string')?document.querySelector(selector):selector;
       container.innerHTML = html
-      console.log("emit tpl-inserted")
       this.emit('tpl-inserted');
 
       // TODO: this shoudl be deprecated once new Template class is integrated
@@ -967,7 +988,6 @@ class AwesomeCart extends EventEmitter {
 
 function delayedTpl(id, tpl_name, obj) {
   var t = cart.template(tpl_name);
-  console.log(cart.template(t))
   var tpl_promise = t
     .promiseReady()
     .then((tpl) => {
