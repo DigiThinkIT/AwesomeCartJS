@@ -295,16 +295,8 @@ class Feed extends EventEmitter {
     this.options.dataSource(this.filters)
       .then(this.options.tpl.isFulfilledPassthrough())
 			.then((result) => {
-				console.log("Sort?", this.options.sort)
-				for(var i in result) {
-					console.log(result[i].price);
-				}
 				if ( this.options.sort ) {
-					result = result.sort(this.options.sort);
-					for(var i in result) {
-						console.log(result[i].price);
-					}
-					return result;
+					return result.sort(this.options.sort);
 				}
 				return result;
 			})
