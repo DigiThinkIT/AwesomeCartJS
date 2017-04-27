@@ -4,7 +4,8 @@
  */
 
 const {log, error} = require('./debug');
-const {sargs, hasClass, addClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const {sargs, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const {htmlEncode, htmlDecode} = require('./html');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
 const Handlebars = require('handlebars')
@@ -616,21 +617,68 @@ class AwesomeCart extends EventEmitter {
     setAttr(btn, 'data-awc-id', el.value);
   }
 
+	_validateChildOptions(data, optionIdx, optionHash) {
+		if ( data.selectors.length < optionIdx + 1 ) {
+			return;
+		}
+
+		var optionSelector = data.selectors[optionIdx + 1];
+		var optionEl = document.querySelectorAll(optionSelector);
+		if ( optionEl.length > 0 ) {
+			optionEl = optionEl[0];
+
+			for(var i = 0; i < optionEl.length; i++) {
+				var opEl = optionEl.options[i]
+				var value = htmlDecode(opEl.value);
+				optionHash[optionIdx + 1] = value;
+
+				var hash = optionHash.join(',')
+				var sku = data.hashes[hash]
+				if ( sku === undefined ) {
+					// option hash is not valid. We'll disable this option;
+					setAttr(opEl, "disabled", "disabled")
+				} else {
+					opEl.removeAttribute("disabled");
+				}
+			}
+		}
+	}
+
   _onOptionElChange(el, data, e) {
     // build hash from selectors in the order specified
+		// this does two things:
+		// - Builds a hash index to fetch the sku of the selcted product
+		// - Builds the first half of a similar index to later test all other
+		//   options that come after to enable/dissable values.
+
     var optionHash = [];
+		var selectorIdx = -1;
     for(var i = 0; i < data.selectors.length; i++) {
       var selector = data.selectors[i];
       var elems = document.querySelectorAll(selector)
       if ( elems.length > 0 ) {
         var optionEl = elems[0];
-        optionHash.push(optionEl.value)
+				var value = htmlDecode(optionEl.value);
+				if ( optionEl == el ) {
+					selectorIdx = i;
+				}
+        optionHash.push(value)
       }
     }
-    var optionHash = optionHash.join(',')
-    var sku = data.hashes[optionHash]
+    var hash = optionHash.join(',')
+    var sku = data.hashes[hash]
     // update sku on add to cart button
     setAttr(data.btn, 'data-id', sku)
+
+		this._validateChildOptions(data, selectorIdx, optionHash);
+
+		if ( sku === undefined ) {
+			addClass(data.btn, 'disabled');
+			addClass(data.btn, 'btn-disabled');
+		} else {
+			removeClass(data.btn, 'disabled');
+			removeClass(data.btn, 'btn-disabled');
+		}
   }
 
   /**
@@ -661,6 +709,7 @@ class AwesomeCart extends EventEmitter {
             btn: btn
           }
 
+					var firstEl = null;
           for(var i = 0; i < optionData.selectors.length; i++) {
             var selector = optionData.selectors[i];
 
@@ -668,12 +717,17 @@ class AwesomeCart extends EventEmitter {
             var elems = document.querySelectorAll(selector)
             if ( elems.length > 0 ) {
               var optionEl = elems[0];
+							if ( firstEl == null ) {
+								firstEl = optionEl;
+							}
               optionEl.addEventListener('change', this._onOptionElChange.bind(this, optionEl, optionData))
-            }
+            } else {
+							console.log("Could not bind to variant widget: ", selector);
+						}
           }
 
           // trigger change event to make sure our sku ids are set for default selections
-          this._onOptionElChange.bind(this, optionEl, optionData)();
+          this._onOptionElChange.bind(this, firstEl, optionData)();
         }
       }
     }
@@ -693,6 +747,12 @@ class AwesomeCart extends EventEmitter {
     var sku = btn.dataset.id;
     var qty = btn.dataset.qty || 1;
     var options = btn.dataset.options;
+
+		if ( hasClass('disabled') ) {
+			// ignore clicks on disabled buttons
+			return;
+		}
+
     if ( options && options instanceof String ) {
       options = queryString.parse(options)
     }
@@ -1042,8 +1102,20 @@ Handlebars.registerHelper("json", function(value, scope) {
   return JSON.stringify(value)
 })
 
+Handlebars.registerHelper('escape', function(value, scope) {
+	return value.replace(/(['"])/g, '\\$1');
+})
+
+Handlebars.registerHelper('htmlEncode', function(value, scope) {
+	return htmlEncode(value);
+})
+
+Handlebars.registerHelper('htmlDecode', function(value, scope) {
+	return htmlDecode(value);
+})
+
 Handlebars.registerHelper('cssEscape', function(value, scope) {
-  return value.replace(/\s/g, '_')
+  return value.replace(/[^a-z0-9]/gi, '_')
 })
 
 Handlebars.registerHelper('eachEven', function(arr, scope) {
@@ -1132,7 +1204,9 @@ module.exports = {
   uuid: uuid,
   get: xhr.get,
   post: xhr.post,
-  Template: Template
+  Template: Template,
+	htmlEncode: htmlEncode,
+	htmlDecode: htmlDecode
 }
 
 // To be deprecated

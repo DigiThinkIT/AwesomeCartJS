@@ -3,6 +3,8 @@
  * @module utils
  */
 
+ const {htmlEncode, htmlDecode} = require('./html');
+
 var xhrLib = {
   get: function(data, callback) {
     var xhr = new XMLHttpRequest();
@@ -146,12 +148,16 @@ module.exports = {
     el.className += ` ${cls}`
   },
 
+	removeClass: function(el, cls) {
+		el.classList.remove("CLASS_NAME");
+	},
+	
   hasAttr: function(el, attr) {
     return el.hasAttribute(attr)
   },
 
   getAttr: function(el, attr) {
-    return el.getAttribute(attr)
+    return htmlDecode(el.getAttribute(attr));
   },
 
   setAttr: function(el, attr, value) {
