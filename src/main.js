@@ -4,7 +4,7 @@
  */
 
 const {log, error} = require('./debug');
-const {sargs, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const {sargs, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
 const {htmlEncode, htmlDecode} = require('./html');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
@@ -618,12 +618,12 @@ class AwesomeCart extends EventEmitter {
   }
 
 	_validateChildOptions(data, optionIdx, optionHash) {
-		if ( data.selectors.length < optionIdx + 1 ) {
+		var optionSelector = data.selectors[optionIdx + 1];
+		if ( !optionSelector ) {
 			return;
 		}
 
-		var optionSelector = data.selectors[optionIdx + 1];
-		var optionEl = document.querySelectorAll(optionSelector);
+		var optionEl = queryAll(optionSelector);
 		if ( optionEl.length > 0 ) {
 			optionEl = optionEl[0];
 
@@ -655,7 +655,7 @@ class AwesomeCart extends EventEmitter {
 		var selectorIdx = -1;
     for(var i = 0; i < data.selectors.length; i++) {
       var selector = data.selectors[i];
-      var elems = document.querySelectorAll(selector)
+      var elems = queryAll(selector)
       if ( elems.length > 0 ) {
         var optionEl = elems[0];
 				var value = htmlDecode(optionEl.value);
@@ -685,7 +685,7 @@ class AwesomeCart extends EventEmitter {
    * Updates click event references and overall UI handling
    */
   updateUI() {
-    var addToCartElems = document.querySelectorAll('[data-awc-addtocart]');
+    var addToCartElems = queryAll('[data-awc-addtocart]');
     for(var i = 0; i < addToCartElems.length; i++) {
       var btn = addToCartElems[i]
       if ( !hasClass(btn, 'awc-bound') ) {
@@ -695,7 +695,7 @@ class AwesomeCart extends EventEmitter {
         // on changes
         if ( hasAttr(btn, 'data-awc-id-from') ) {
           var fromSelector = getAttr(btn, 'data-awc-id-from');
-          var fromEl = document.querySelectorAll(fromSelector);
+          var fromEl = queryAll(fromSelector);
           if ( fromEl.length > 0 ) {
             fromEl = fromEl[0];
             fromEl.addEventListener('change', this._onFromIdChange.bind(this, fromEl, btn));
@@ -714,7 +714,7 @@ class AwesomeCart extends EventEmitter {
             var selector = optionData.selectors[i];
 
             // find this option element
-            var elems = document.querySelectorAll(selector)
+            var elems = queryAll(selector)
             if ( elems.length > 0 ) {
               var optionEl = elems[0];
 							if ( firstEl == null ) {
@@ -732,7 +732,7 @@ class AwesomeCart extends EventEmitter {
       }
     }
 
-    var removeFromCartElems = document.querySelectorAll('[data-awc-removefromcart]');
+    var removeFromCartElems = queryAll('[data-awc-removefromcart]');
     for(var i = 0; i < removeFromCartElems.length; i++) {
       var btn = removeFromCartElems[i]
       if ( !hasClass(btn, 'awc-bound') ) {

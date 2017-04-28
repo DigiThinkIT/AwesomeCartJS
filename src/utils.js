@@ -3,7 +3,7 @@
  * @module utils
  */
 
- const {htmlEncode, htmlDecode} = require('./html');
+ const {htmlEncode, htmlDecode, queryEscape} = require('./html');
 
 var xhrLib = {
   get: function(data, callback) {
@@ -151,7 +151,7 @@ module.exports = {
 	removeClass: function(el, cls) {
 		el.classList.remove("CLASS_NAME");
 	},
-	
+
   hasAttr: function(el, attr) {
     return el.hasAttribute(attr)
   },
@@ -163,6 +163,14 @@ module.exports = {
   setAttr: function(el, attr, value) {
     el.setAttribute(attr, value);
   },
+
+	queryAll: function(query, context) {
+		if ( context === undefined ) {
+			context = document;
+		}
+
+		return context.querySelectorAll(queryEscape(query));
+	},
 
   debug: {
     LEVEL: {

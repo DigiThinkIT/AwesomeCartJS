@@ -29,7 +29,11 @@ module.exports = {
 		value = value.replace(/</g,"&lt;");
 		hiddenPre.innerHTML = value;
 		var result = hiddenPre.textContent;
-		console.log(value, "=>", result);
+		return result;
+	},
+	queryEscape: function(value) {
+		if (!value) { return []; }
+		var result = value.replace(/#(\d)/, "#\\3$1 ");
 		return result;
 	}
 }
