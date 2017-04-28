@@ -748,8 +748,11 @@ class AwesomeCart extends EventEmitter {
     var qty = btn.dataset.qty || 1;
     var options = btn.dataset.options;
 
-		if ( hasClass('disabled') ) {
+		console.log("Add to cart clicked", btn, sku, qty, options);
+
+		if ( hasClass(btn, 'disabled') ) {
 			// ignore clicks on disabled buttons
+			console.log("Btn is disabled")
 			return;
 		}
 
