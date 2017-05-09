@@ -278,6 +278,8 @@ class Feed extends EventEmitter {
     }
 
     this._waitFor = []
+		this._freezeHeight = 0;
+		this._lastUnfreeze = null;
 
     this.cart.on('init', this.onInit.bind(this))
   }
@@ -303,7 +305,6 @@ class Feed extends EventEmitter {
 			})
       .then((result) => {
         this.items = [];
-        this.empty()
 
         var count = 0;
         for(var i in result) {
@@ -317,11 +318,14 @@ class Feed extends EventEmitter {
           is_empty: count == 0
         }
         var html = this.options.tpl.beginRender(obj)
+				this.freezeHeight();
+				this.empty()
         this.container.insertAdjacentHTML('beforeend', html)
         this.emit('tpl-inserted')
 
         this.options.tpl.once('tpl-end-render', () => {
           this.emit('updated', this, this.products);
+					this.unfreezeHeight();
         })
 
         return this.options.tpl.endRender();
@@ -335,6 +339,50 @@ class Feed extends EventEmitter {
   get container() {
     return document.querySelector(this.options.container)
   }
+
+	freezeHeight() {
+
+		if ( this._freezeHeight > 0 ) {
+			return;
+		}
+
+		this._freezeHeight += 1;
+		var container = this.container;
+
+    if ( !container ) {
+      throw new Error('Invalid container for feed "'+this.name+'"')
+    }
+
+		var containerHeight = container.clientHeight;
+		container.style.height = containerHeight + "px";
+	}
+
+	unfreezeHeight() {
+		if ( this._freezeHeight > 1 ) {
+			this._freezeHeight -= 1;
+			return;
+		}
+		this._freezeHeight -= 1;
+		if ( this._freezeHeight < 0 ) {
+			this._freezeHeight = 0;
+		}
+
+		var container = this.container;
+
+    if ( !container ) {
+      throw new Error('Invalid container for feed "'+this.name+'"')
+    }
+
+		// elements need time to resize after rendering(specially images)
+		// allow a 200ms delay before unfreezing container height
+		if ( this._lastUnfreeze ) {
+			clearTimeout(this._lastUnfreeze);
+		}
+		this._lastUnfreeze = setTimeout(() => {
+			container.style.height="";
+			this._lastUnfreeze = null;
+		}, 200);
+	}
 
   empty() {
     var container = this.container;
@@ -496,7 +544,10 @@ class AwesomeCart extends EventEmitter {
       tpl = module.exports.loadTemplate(tpl)
     }
 
-    return new Template(tpl, this);
+    var tpl_instance = new Template(tpl, this);
+		tpl_instance.on('tpl-end-render', this._on_tpl_end_render.bind(this));
+
+		return tpl_instance;
   }
 
   /**
@@ -748,11 +799,8 @@ class AwesomeCart extends EventEmitter {
     var qty = btn.dataset.qty || 1;
     var options = btn.dataset.options;
 
-		console.log("Add to cart clicked", btn, sku, qty, options);
-
 		if ( hasClass(btn, 'disabled') ) {
 			// ignore clicks on disabled buttons
-			console.log("Btn is disabled")
 			return;
 		}
 
@@ -950,14 +998,19 @@ class AwesomeCart extends EventEmitter {
 
       // TODO: this shoudl be deprecated once new Template class is integrated
       //       Remember to remove.
-      tpl.once('tpl-end-render', () => {
-        this.emit('tpl-ready')
-      })
+      //tpl.once('tpl-end-render', () => {
+      //  this.emit('tpl-ready')
+      //})
 
       return tpl.endRender()
     })
 
   }
+
+	_on_tpl_end_render() {
+		// called on all templates bound to this cart
+		this.emit('tpl-ready');
+	}
 
   _emitUpdated() {
     this.emit('updated')
