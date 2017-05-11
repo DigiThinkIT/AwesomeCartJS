@@ -87,7 +87,7 @@ var cart = new awc.AwesomeCart({
 // create an embeded cart feed
 cart.newCartFeed('embeded_cart', {
   container: '#cart-embed-content',
-  tpl: awc.getTemplate('templates/cart_embeded.html')
+  tpl: cart.template('templates/cart_embeded.html')
 })
 
 // manage embeded cart item counter

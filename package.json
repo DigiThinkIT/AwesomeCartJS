@@ -12,6 +12,7 @@
     "dist-bundle": "browserify src/main.js -d -t [ babelify --presets [ es2015 react ] ]  --no-comments | uglifyjs -mc warnings=false > dist/awc.bundle.js",
     "watch-bundle": "watchify src/main.js -o dist/awc.bundle.js -d -v -t [ babelify --presets [ es2015 react ] ]  --no-comments",
     "dist-sa": "browserify src/main.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc  --no-comments | uglifyjs -mc warnings=false > dist/awc.standalone.js",
+		"build-sa": "browserify src/main.js -o dist/awc.standalone.js -d -t [ babelify --presets [ es2015 react ] ] --standalone awc  --no-comments",
     "watch-sa": "watchify src/main.js -o dist/awc.standalone.js -d -v -t [ babelify --presets [ es2015 react ] ] --standalone awc  --no-comments",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

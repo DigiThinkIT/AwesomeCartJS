@@ -13,6 +13,8 @@
   crossorigin="anonymous"></script>
 </head>
 <body>
+
+	<!-- Cosmetic navigation bar to display grid and list views - Not required to run our cart -->
   <nav id="header" class="navbar navbar-fixed-top">
     <div id="header-container" class="container-fluid navbar-container">
       <div id="navbar" class="navbar-collapse">
@@ -26,13 +28,20 @@
                   class="glyphicon glyphicon-th"></span>Grid</a>
           </div>
 
+					<!-- Here we setup our embeded cart inside a bootstrap dropdown widget -->
           <div id="cart-embed" class="dropdown btn btn-sm pull-right">
             <button class="btn btn-sm btn-primary dropdown-toggle" type="button" id="dropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
               <i class="material-icons">shopping_cart</i>
+
+							<!-- A simple counter to show how we might take advantage of feed events -->
               <div class="cart-count"><span class="content"></span></div>
+
             </button>
             <div class="dropdown-menu dropdown-menu-right" aria-labelledby="dropdownMenuButton">
+
+							<!-- The actual container for our embeded cart feed -->
               <div id="cart-embed-content"></div>
+
             </div>
           </div><!-- /.cart-embed -->
 
@@ -42,30 +51,41 @@
   </div><!-- /.container -->
 </nav><!-- /.navbar -->
 
-
+  <!-- Product Feed Container - Our catalog will be rendered inside this container -->
   <div id="products" class="row list-group">
   </div>
+	<!-- Shopping Cart Feed Container - Our full size shopping cart will be rendered inside this container -->
   <div id="cart-full">
   </div>
+
+	<!-- Load our auxiliary libraries -->
   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
   <script type="text/javascript" src="/js/jquery.helpers.js"></script>
+
+	<!-- Load awesome cart - In the standalone version it will be available under the awc variable -->
   <script type="text/javascript" src="/dist/awc.standalone.js"></script>
+
+	<!-- Load our cart customization script - On thi example we load dummy products for the demo -->
   <script type="text/javascript" src="/js/cart.js"></script>
+
+	<!-- Finally setup our cart and start it up --->
   <script type="text/javascript">
     // create a product listing feed
     cart.newProductFeed('products', {
       container: '#products',
-      tpl: awc.getTemplate('templates/catalog.html')
+      tpl: cart.template('templates/catalog.html')
     })
 
     // create a full cart feed
-    cart.newCartFeed('cart2', {
+    cart.newCartFeed('shoppingcart', {
       container: '#cart-full',
-      tpl: awc.getTemplate('templates/cart_full.html')
+      tpl: cart.template('templates/cart_full.html')
     })
 
+		// Launch cart
     cart.bootstrap()
 
+		// Cosmetic logic switch between grid and list mode on our catalog
     $(document).ready(function() {
       $('#list').click(function(e) {
         e.preventDefault();

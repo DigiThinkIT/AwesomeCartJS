@@ -4,7 +4,8 @@
  */
 
 const {log, error} = require('./debug');
-const {sargs, hasClass, addClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const {sargs, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
+const {htmlEncode, htmlDecode} = require('./html');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
 const Handlebars = require('handlebars')
@@ -277,6 +278,8 @@ class Feed extends EventEmitter {
     }
 
     this._waitFor = []
+		this._freezeHeight = 0;
+		this._lastUnfreeze = null;
 
     this.cart.on('init', this.onInit.bind(this))
   }
@@ -302,7 +305,6 @@ class Feed extends EventEmitter {
 			})
       .then((result) => {
         this.items = [];
-        this.empty()
 
         var count = 0;
         for(var i in result) {
@@ -316,11 +318,14 @@ class Feed extends EventEmitter {
           is_empty: count == 0
         }
         var html = this.options.tpl.beginRender(obj)
+				this.freezeHeight();
+				this.empty()
         this.container.insertAdjacentHTML('beforeend', html)
         this.emit('tpl-inserted')
 
         this.options.tpl.once('tpl-end-render', () => {
           this.emit('updated', this, this.products);
+					this.unfreezeHeight();
         })
 
         return this.options.tpl.endRender();
@@ -334,6 +339,50 @@ class Feed extends EventEmitter {
   get container() {
     return document.querySelector(this.options.container)
   }
+
+	freezeHeight() {
+
+		if ( this._freezeHeight > 0 ) {
+			return;
+		}
+
+		this._freezeHeight += 1;
+		var container = this.container;
+
+    if ( !container ) {
+      throw new Error('Invalid container for feed "'+this.name+'"')
+    }
+
+		var containerHeight = container.clientHeight;
+		container.style.height = containerHeight + "px";
+	}
+
+	unfreezeHeight() {
+		if ( this._freezeHeight > 1 ) {
+			this._freezeHeight -= 1;
+			return;
+		}
+		this._freezeHeight -= 1;
+		if ( this._freezeHeight < 0 ) {
+			this._freezeHeight = 0;
+		}
+
+		var container = this.container;
+
+    if ( !container ) {
+      throw new Error('Invalid container for feed "'+this.name+'"')
+    }
+
+		// elements need time to resize after rendering(specially images)
+		// allow a 200ms delay before unfreezing container height
+		if ( this._lastUnfreeze ) {
+			clearTimeout(this._lastUnfreeze);
+		}
+		this._lastUnfreeze = setTimeout(() => {
+			container.style.height="";
+			this._lastUnfreeze = null;
+		}, 200);
+	}
 
   empty() {
     var container = this.container;
@@ -495,7 +544,10 @@ class AwesomeCart extends EventEmitter {
       tpl = module.exports.loadTemplate(tpl)
     }
 
-    return new Template(tpl, this);
+    var tpl_instance = new Template(tpl, this);
+		tpl_instance.on('tpl-end-render', this._on_tpl_end_render.bind(this));
+
+		return tpl_instance;
   }
 
   /**
@@ -616,28 +668,75 @@ class AwesomeCart extends EventEmitter {
     setAttr(btn, 'data-awc-id', el.value);
   }
 
+	_validateChildOptions(data, optionIdx, optionHash) {
+		var optionSelector = data.selectors[optionIdx + 1];
+		if ( !optionSelector ) {
+			return;
+		}
+
+		var optionEl = queryAll(optionSelector);
+		if ( optionEl.length > 0 ) {
+			optionEl = optionEl[0];
+
+			for(var i = 0; i < optionEl.length; i++) {
+				var opEl = optionEl.options[i]
+				var value = htmlDecode(opEl.value);
+				optionHash[optionIdx + 1] = value;
+
+				var hash = optionHash.join(',')
+				var sku = data.hashes[hash]
+				if ( sku === undefined ) {
+					// option hash is not valid. We'll disable this option;
+					setAttr(opEl, "disabled", "disabled")
+				} else {
+					opEl.removeAttribute("disabled");
+				}
+			}
+		}
+	}
+
   _onOptionElChange(el, data, e) {
     // build hash from selectors in the order specified
+		// this does two things:
+		// - Builds a hash index to fetch the sku of the selcted product
+		// - Builds the first half of a similar index to later test all other
+		//   options that come after to enable/dissable values.
+
     var optionHash = [];
+		var selectorIdx = -1;
     for(var i = 0; i < data.selectors.length; i++) {
       var selector = data.selectors[i];
-      var elems = document.querySelectorAll(selector)
+      var elems = queryAll(selector)
       if ( elems.length > 0 ) {
         var optionEl = elems[0];
-        optionHash.push(optionEl.value)
+				var value = htmlDecode(optionEl.value);
+				if ( optionEl == el ) {
+					selectorIdx = i;
+				}
+        optionHash.push(value)
       }
     }
-    var optionHash = optionHash.join(',')
-    var sku = data.hashes[optionHash]
+    var hash = optionHash.join(',')
+    var sku = data.hashes[hash]
     // update sku on add to cart button
     setAttr(data.btn, 'data-id', sku)
+
+		this._validateChildOptions(data, selectorIdx, optionHash);
+
+		if ( sku === undefined ) {
+			addClass(data.btn, 'disabled');
+			addClass(data.btn, 'btn-disabled');
+		} else {
+			removeClass(data.btn, 'disabled');
+			removeClass(data.btn, 'btn-disabled');
+		}
   }
 
   /**
    * Updates click event references and overall UI handling
    */
   updateUI() {
-    var addToCartElems = document.querySelectorAll('[data-awc-addtocart]');
+    var addToCartElems = queryAll('[data-awc-addtocart]');
     for(var i = 0; i < addToCartElems.length; i++) {
       var btn = addToCartElems[i]
       if ( !hasClass(btn, 'awc-bound') ) {
@@ -647,7 +746,7 @@ class AwesomeCart extends EventEmitter {
         // on changes
         if ( hasAttr(btn, 'data-awc-id-from') ) {
           var fromSelector = getAttr(btn, 'data-awc-id-from');
-          var fromEl = document.querySelectorAll(fromSelector);
+          var fromEl = queryAll(fromSelector);
           if ( fromEl.length > 0 ) {
             fromEl = fromEl[0];
             fromEl.addEventListener('change', this._onFromIdChange.bind(this, fromEl, btn));
@@ -661,24 +760,30 @@ class AwesomeCart extends EventEmitter {
             btn: btn
           }
 
+					var firstEl = null;
           for(var i = 0; i < optionData.selectors.length; i++) {
             var selector = optionData.selectors[i];
 
             // find this option element
-            var elems = document.querySelectorAll(selector)
+            var elems = queryAll(selector)
             if ( elems.length > 0 ) {
               var optionEl = elems[0];
+							if ( firstEl == null ) {
+								firstEl = optionEl;
+							}
               optionEl.addEventListener('change', this._onOptionElChange.bind(this, optionEl, optionData))
-            }
+            } else {
+							console.log("Could not bind to variant widget: ", selector);
+						}
           }
 
           // trigger change event to make sure our sku ids are set for default selections
-          this._onOptionElChange.bind(this, optionEl, optionData)();
+          this._onOptionElChange.bind(this, firstEl, optionData)();
         }
       }
     }
 
-    var removeFromCartElems = document.querySelectorAll('[data-awc-removefromcart]');
+    var removeFromCartElems = queryAll('[data-awc-removefromcart]');
     for(var i = 0; i < removeFromCartElems.length; i++) {
       var btn = removeFromCartElems[i]
       if ( !hasClass(btn, 'awc-bound') ) {
@@ -693,6 +798,12 @@ class AwesomeCart extends EventEmitter {
     var sku = btn.dataset.id;
     var qty = btn.dataset.qty || 1;
     var options = btn.dataset.options;
+
+		if ( hasClass(btn, 'disabled') ) {
+			// ignore clicks on disabled buttons
+			return;
+		}
+
     if ( options && options instanceof String ) {
       options = queryString.parse(options)
     }
@@ -887,14 +998,19 @@ class AwesomeCart extends EventEmitter {
 
       // TODO: this shoudl be deprecated once new Template class is integrated
       //       Remember to remove.
-      tpl.once('tpl-end-render', () => {
-        this.emit('tpl-ready')
-      })
+      //tpl.once('tpl-end-render', () => {
+      //  this.emit('tpl-ready')
+      //})
 
       return tpl.endRender()
     })
 
   }
+
+	_on_tpl_end_render() {
+		// called on all templates bound to this cart
+		this.emit('tpl-ready');
+	}
 
   _emitUpdated() {
     this.emit('updated')
@@ -1042,8 +1158,20 @@ Handlebars.registerHelper("json", function(value, scope) {
   return JSON.stringify(value)
 })
 
+Handlebars.registerHelper('escape', function(value, scope) {
+	return value.replace(/(['"])/g, '\\$1');
+})
+
+Handlebars.registerHelper('htmlEncode', function(value, scope) {
+	return htmlEncode(value);
+})
+
+Handlebars.registerHelper('htmlDecode', function(value, scope) {
+	return htmlDecode(value);
+})
+
 Handlebars.registerHelper('cssEscape', function(value, scope) {
-  return value.replace(/\s/g, '_')
+  return value.replace(/[^a-z0-9]/gi, '_')
 })
 
 Handlebars.registerHelper('eachEven', function(arr, scope) {
@@ -1132,7 +1260,9 @@ module.exports = {
   uuid: uuid,
   get: xhr.get,
   post: xhr.post,
-  Template: Template
+  Template: Template,
+	htmlEncode: htmlEncode,
+	htmlDecode: htmlDecode
 }
 
 // To be deprecated

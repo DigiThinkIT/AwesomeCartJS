@@ -47,7 +47,16 @@ app.post('/awc', function(req, res, next) {
   console.log(req.body)
 
   if ( req.body.action == 'addToCart' ) {
-    ses.cart.items.push(req.body.data)
+		var items = []
+		if ( !Array.isArray(req.body.data) ) {
+			items.push(req.body.data);
+		} else {
+			items = req.body.data;
+		}
+
+		_.each(items, (item) => {
+			ses.cart.items.push(item)
+		})
     res.send({ 'success': true })
   } else if ( req.body.action == 'removeFromCart' ) {
     _.remove(ses.cart.items, (item) => {
