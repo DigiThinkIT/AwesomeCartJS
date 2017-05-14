@@ -282,6 +282,10 @@ class Feed extends EventEmitter {
 		this._lastUnfreeze = null;
 
     this.cart.on('init', this.onInit.bind(this))
+
+		if ( this.options.dataSource.constructor === DataStore ) {
+			this.options.dataSource.on('updated', this.update.bind(this))
+		}
   }
 
   onInit() {
@@ -295,7 +299,16 @@ class Feed extends EventEmitter {
   update() {
     this.emit('update', this)
 
-    this.options.dataSource(this.filters)
+		var dataSource = this.options.dataSource
+
+		if ( typeof dataSource != 'function' ) {
+			// assume this is a DataStore instance
+			// TODO: replace the use of function data source in favor
+			//       of the DataStore class instance
+			dataSource = this.options.dataSource.query.bind(this.options.dataSource);
+		}
+
+    dataSource(this.filters)
       .then(this.options.tpl.isFulfilledPassthrough())
 			.then((result) => {
 				if ( this.options.sort ) {
@@ -331,7 +344,7 @@ class Feed extends EventEmitter {
         return this.options.tpl.endRender();
       })
       .catch((err) => {
-        console.error(err)
+        debug.error(err)
         //TODO: Handle errors
       });
   }
@@ -453,13 +466,100 @@ class CartFeed extends Feed {
   }
 }
 
+class DataStore extends EventEmitter {
+	constructor(data, queryFn) {
+		super();
+
+		this._data = data || [];
+		this._lastQueryArgs = null;
+		this._lastFilter = null;
+		this._queryFn = queryFn;
+		this._lastQuery = null;
+		this._eventsOff = 0;
+	}
+
+	get data() {
+		return this._data;
+	}
+
+	eventsOff() {
+		this._eventsOff++;
+	}
+
+	eventsOn() {
+		if ( this._eventsOff > 0 ) {
+			this._eventsOff--;
+			if ( this._eventsOff == 0 ) {
+				this.emit("refresh", this);
+			}
+		}
+	}
+
+	emit() {
+		if ( this._eventsOff == 0 ) {
+			return super.emit.apply(this, arguments);
+		}
+	}
+
+	query(filter) {
+		if ( this._queryFn ) {
+
+			var hash = JSON.stringify(filter);
+
+			if ( this._lastFilter && this._lastFilter == hash ) {
+				return this._lastQuery;
+			}
+
+			this._lastFilter = hash;
+			this._lastQuery = this._queryFn(filter)
+				.then((resp) => {
+					this._data = resp;
+					this.emit("refresh", this)
+					return this._data;
+				})
+
+			return this._lastQuery;
+		} else {
+			debug.warn("This DataStore has no query function");
+		}
+
+		return new Promise((resolve, reject) => {
+			resolve(base._data);
+		})
+	}
+
+	find(filter) {
+		return _.find(this._data, filter);
+	}
+
+	update(data) {
+		var row = _.find(this._data, { id: data.id });
+		if ( row ) {
+			_.extend(row, data);
+			this.emit("update", this, row)
+		} else {
+			this._data.push(data)
+			this.emit("insert", this, data)
+		}
+
+		return this;
+	}
+
+	remove(filter) {
+		var removed = _.remove(this._data, filter )
+		this.emit("remove", this, removed)
+		return removed;
+	}
+
+}
+
 /**
  * The main cart class. All managing of shopping cart happens here.
  */
 class AwesomeCart extends EventEmitter {
   constructor() {
     super()
-    this._cart = []
+    this._cart = new DataStore([], this.fetchCartItems.bind(this))
     this._lastTotalCount = 0
     this._lastTotalItems = 0
 
@@ -475,6 +575,10 @@ class AwesomeCart extends EventEmitter {
     window.addEventListener('hashchange', (e) => {
       this.emit('hashchange', e)
     })
+
+		this._cart.on("update", this._onCartDataUpdate.bind(this));
+		this._cart.on("insert", this._onCartDataInsert.bind(this));
+		this._cart.on("remove", this._onCartDataRemove.bind(this));
   }
 
   /**
@@ -489,7 +593,7 @@ class AwesomeCart extends EventEmitter {
    * @return int
    */
   get totalItems() {
-    return this._cart.length
+    return this._cart.data.length
   }
 
   get lastTotalItems() {
@@ -502,16 +606,16 @@ class AwesomeCart extends EventEmitter {
   */
   get totalCount() {
     var count = 0;
-    for(var i in this._cart) {
+    for(var i in this._cart.data) {
       var consider = true;
 
       // don't count sub items
-      if ( this._cart[i].options && this._cart[i].options.subgroup ) {
+      if ( this._cart.data[i].options && this._cart.data[i].options.subgroup ) {
         consider = false;
       }
 
       if ( consider ) {
-        count += this._cart[i].qty || 0
+        count += this._cart.data[i].qty || 0
       }
     }
 
@@ -531,8 +635,90 @@ class AwesomeCart extends EventEmitter {
    * @return Array
    */
   get items() {
-    return this._cart
+    return this._cart.data
   }
+
+	_onCartDataUpdate(store, row) {
+		debug.log("On cart update", arguments);
+
+		var allowedFields = ["id", "qty", "sku"]
+		var payload = {};
+		_.each(allowedFields, (f) => {
+			payload[f] = row[f];
+		})
+
+		return this.storeAdapter.sessionAction('updateItem', [payload])
+			.then((result) => {
+				console.log('updateCart', result);
+				this._updateBulkCartData(result);
+				this._emitUpdated();
+			})
+	}
+
+	_onCartDataInsert(store, row) {
+		debug.log("On cart insert", arguments);
+	}
+
+	_onCartDataRemove(store, row) {
+		debug.log("On cart remove", arguments);
+	}
+
+	_updateBulkCartData(data) {
+		// we expect data to look like:
+		// { data: [<array of items>], removed: [<array of removed ids>]}
+
+		var jobs = []
+
+		this._cart.eventsOff();
+
+		if ( data.removed ) {
+			this._cart.remove((item) => {
+				return data.removed.indexOf(item.id) > -1;
+			});
+		}
+
+		_.each(data.data, (itm) => {
+			// wrap promise so we always resolve even on errors while fetching
+			// product details so that we don't kill the shopping cart ui
+			jobs.push((function(itm) {
+				return new Promise((resolve, reject) => {
+					this.storeAdapter.getProductBySKU(itm.sku)
+						.then((product) => {
+							if ( product ) {
+								var item = {
+									product: product,
+									qty: itm.qty,
+									options: itm.options,
+									id: itm.id,
+									unit: product.price,
+									total: product.price * itm.qty
+								}
+								// update cart item with product detail
+								this._cart.update(item)
+								resolve(item)
+							}
+
+							resolve(false);
+						}) // eof - getProductBySKU.then
+						.catch((err) => {
+							debug.error("Error fetching product details during cart item update for item", itm)
+							debug.error(err);
+							resolve(false)
+						}) // eof - getProductBySKU.catch
+					}) // eof - new promise
+				}).bind(this)(itm)) // eof - job.push
+		});
+
+		return Promise.all(jobs).then(() => {
+			this._cart.eventsOn();
+			return true;
+		})
+		.catch((err) => {
+			this._cart.eventsOn();
+			debug.error("Error while updating cart items")
+			debug.error(err)
+		})
+	}
 
   template(name) {
     var tpl = this.storeAdapter.loadTemplate(name)
@@ -558,8 +744,9 @@ class AwesomeCart extends EventEmitter {
    */
   newProductFeed(name, options) {
     // set a few defaults for products only feed
+
     options = sargs(options,
-      { arg: 'dataSource', default: this.storeAdapter.fetchProducts.bind(this.storeAdapter) },
+      { arg: 'dataSource', default: this.storeAdapter.products }, //.fetchProducts.bind(this.storeAdapter) },
       { arg: 'idField', default: 'sku' },
       { arg: 'filters' },
       { arg: 'container' },
@@ -578,7 +765,7 @@ class AwesomeCart extends EventEmitter {
 
   newCartFeed(name, options) {
     options = sargs(options,
-      { arg: 'dataSource', default: this.fetchCartItems.bind(this) },
+      { arg: 'dataSource', default: this._cart },
       { arg: 'idField', default: 'id' },
       { arg: 'filters' },
       { arg: 'container' },
@@ -594,8 +781,8 @@ class AwesomeCart extends EventEmitter {
       // build item list considering grouped items
       var cart_items = []
       var grouped_items = {}
-      for(var i in this._cart) {
-        var item = this._cart[i];
+      for(var i in this._cart.data) {
+        var item = this._cart.data[i];
         var item_tmp = {
           id: item.id,
           qty: item.qty,
@@ -732,10 +919,16 @@ class AwesomeCart extends EventEmitter {
 		}
   }
 
+	_onAdjustQtyChange(el, options, e) {
+		this._cart.update({ id: options.item_id, qty: parseInt(el.value) });
+	}
+
   /**
    * Updates click event references and overall UI handling
    */
   updateUI() {
+
+		// data-awc-addtocart magic attribute
     var addToCartElems = queryAll('[data-awc-addtocart]');
     for(var i = 0; i < addToCartElems.length; i++) {
       var btn = addToCartElems[i]
@@ -773,7 +966,7 @@ class AwesomeCart extends EventEmitter {
 							}
               optionEl.addEventListener('change', this._onOptionElChange.bind(this, optionEl, optionData))
             } else {
-							console.log("Could not bind to variant widget: ", selector);
+							debug.log("Could not bind to variant widget: ", selector);
 						}
           }
 
@@ -783,6 +976,7 @@ class AwesomeCart extends EventEmitter {
       }
     }
 
+		// data-awc-removefromcart magic attribute
     var removeFromCartElems = queryAll('[data-awc-removefromcart]');
     for(var i = 0; i < removeFromCartElems.length; i++) {
       var btn = removeFromCartElems[i]
@@ -791,13 +985,54 @@ class AwesomeCart extends EventEmitter {
         addClass(btn, 'awc-bound')
       }
     }
+
+		// data-awc-adjustqty magic attribute
+		var adjustQtyElems = queryAll('[data-awc-adjustqty]');
+		for(var i = 0; i < adjustQtyElems.length; i++) {
+			var el = adjustQtyElems[i]
+
+			if ( !hasClass(el, 'awc-bound') ) {
+
+				var options = {
+					item_id: el.dataset.awcId || el.dataset.id
+				}
+
+				if ( options.item_id === undefined ) {
+					debug.warn("data-awc-adjustqty requires to be paired with data-awc-id or data-id to function", el)
+				}
+
+				options.item_id = htmlDecode(options.item_id);
+				el.addEventListener('change', this._onAdjustQtyChange.bind(this, el, options))
+				addClass(el, 'awc-bound')
+			}
+		}
+
   }
 
   _onAddToCartClick(e) {
     var btn = e.target;
-    var sku = btn.dataset.id;
-    var qty = btn.dataset.qty || 1;
-    var options = btn.dataset.options;
+    var sku = htmlDecode(btn.dataset.id);
+    var qty = btn.dataset.qty || btn.dataset.awcQty || undefined;
+
+    if ( qty === undefined ) {
+			var qty_from = btn.dataset.awcQtyFrom;
+			var els = [];
+
+			try {
+				els = queryAll(qty_from)
+			} catch(err) {
+				debug.error(err);
+			}
+
+			if ( els.length > 0 ) {
+				qty = parseInt(els[0].value); // get qty from referenced element
+			} else {
+				debug.warn("Could not get qty from ", qty_from);
+				qty = 1; // default to 1
+			}
+		}
+
+    var options = btn.dataset.awcOptions;
 
 		if ( hasClass(btn, 'disabled') ) {
 			// ignore clicks on disabled buttons
@@ -807,6 +1042,7 @@ class AwesomeCart extends EventEmitter {
     if ( options && options instanceof String ) {
       options = queryString.parse(options)
     }
+
     this.addToCart(sku, qty, options)
   }
 
@@ -814,32 +1050,23 @@ class AwesomeCart extends EventEmitter {
     debug.group("On Remove From Cart", () => {
       var btn = e.target;
       var id = btn.dataset.id;
-      debug.info("Btn Element: ", btn);
-      debug.info("Data set id %s", id);
+      debug.debug("Btn Element: ", btn);
+      debug.debug("Data set id %s", id);
       this.removeFromCart(id)
         .catch((err) => {
-          console.dir(btn, id, btn.dataset)
-          console.error(err)
+          debug.debug(btn, id, btn.dataset)
+          debug.error(err)
         })
     })
-  }
-
-  listProducts() {
-    //var filters;
-    //[filters] = optionals(arguments, [])
-    let { filters: filters } = sargs(arguments,
-      { arg: 'filters', default: [] }
-    )
-
-
-    return new Promise(function(resolve, reject) {
-
-    });
   }
 
   validate() {
     this.storeAdapter.validate.apply(this.storeAdapter, arguments);
   }
+
+	adjustQty(id, qty) {
+		this._cart.update({ id: id, qty: qty})
+	}
 
   /**
    * Adds a product to the cart by its sku and qty amount.
@@ -867,7 +1094,7 @@ class AwesomeCart extends EventEmitter {
       var args = sargs(arg_item,
         { arg: 'sku', required: 1 },
         { arg: 'qty', default: 1 },
-        { arg: 'options', default: {}}
+        { arg: 'options', default: {} }
       );
 
       // isolate to keep references from messing with each other
@@ -895,7 +1122,7 @@ class AwesomeCart extends EventEmitter {
                 options: item.options || {}
               })
 
-              base._cart.push(item)
+              base._cart.data.push(item)
               return true;
             }
 
@@ -931,13 +1158,13 @@ class AwesomeCart extends EventEmitter {
             return resp
           })
           .catch((err) => {
-            console.error("Error adding items to cart", err);
+            debug.error("Error adding items to cart", err);
           })
       })
       .then(() => {
         this._emitUpdated()
         this.emit("after-add-to-cart", items_added)
-        debug.table(this._cart);
+        debug.table(this._cart.data);
         return true
       })
   }
@@ -947,7 +1174,7 @@ class AwesomeCart extends EventEmitter {
       if ( !id ) {
         reject("Invalid id")
       } else {
-        _.remove(this._cart, (item) => {
+        _.remove(this._cart.data, (item) => {
           return item.id == id;
         })
 
@@ -959,20 +1186,20 @@ class AwesomeCart extends EventEmitter {
           for(var resp_idx in resp) {
             var id = resp[resp_idx];
             var remove_me = null;
-            for(var cart_idx in this._cart) {
-              if ( this._cart[cart_idx].id == id ) {
+            for(var cart_idx in this._cart.data) {
+              if ( this._cart.data[cart_idx].id == id ) {
                 remove_me = this._cart[cart_idx].id
                 break;
               }
             }
 
             if ( remove_me !== null ) {
-              delete this._cart[remove_me];
+              delete this._cart.data[remove_me];
             }
           }
           debug.info("Server returned success");
           this._emitUpdated();
-          debug.table(this._cart);
+          debug.table(this._cart.data);
           return true;
         }).catch((err) => {
           debug.error(err);
@@ -1043,6 +1270,15 @@ class AwesomeCart extends EventEmitter {
     return this.storeAdapter.init()
       .then((resp) => {
         if ( resp.success ) {
+
+					return this._updateBulkCartData({ data: resp.data.items})
+						.then(() => {
+							this.emit('init');
+							this._emitUpdated();
+	            return true;
+						})
+
+					/*
           // rebuilding cart from session data
           var jobs = []
 
@@ -1064,7 +1300,7 @@ class AwesomeCart extends EventEmitter {
                       total: product.price * itm.qty
                     }
 
-                    this._cart.push(item)
+                    this._cart.data.push(item)
                     return item;
                   }
 
@@ -1080,14 +1316,14 @@ class AwesomeCart extends EventEmitter {
             // update all feeds of new data
             this._emitUpdated()
             return true;
-          })
+          })*/
         } else {
           return false;
         }
       }) /* eof this.storeAdapter.init().then() */
       .catch((err) => {
-        console.error("Could not initialize Store Adapter!")
-        console.error(err)
+        debug.error("Could not initialize Store Adapter!")
+        debug.error(err)
       }) /* eof this.storeAdapter.init().catch() */
 
   } /* eof bootstrap() */
@@ -1211,7 +1447,7 @@ Handlebars.registerHelper('currency', function(value, scope) {
   var context = scope.data.root;
 
   if ( context.$cart === undefined ) {
-    console.error('Contexts: ', context, this)
+    debug.error('Contexts: ', context, this)
     throw new Error('Cart not found in current context.')
   }
   if ( value === undefined ) {
@@ -1226,6 +1462,7 @@ module.exports = {
   AwesomeCart: AwesomeCart,
   DemoStoreaAdapter: DemoStoreaAdapter,
   StoreAdapter: StoreAdapter,
+	DataStore: DataStore,
   loadTemplate: function(url) {
     if ( typeof url == "string" ) {
       return xhr.get(url).then((resp) => {
