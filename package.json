@@ -44,6 +44,7 @@
     "uuid": "^3.0.1"
   },
   "dependencies": {
+    "babel-polyfill": "^6.23.0",
     "bluebird": "^3.4.7",
     "eventemitter2": "^3.0.2",
     "handlebars": "^4.0.6",

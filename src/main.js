@@ -2,7 +2,7 @@
 /**
  * @module awc
  */
-
+require("babel-polyfill");
 const {log, error} = require('./debug');
 const {sargs, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
 const {htmlEncode, htmlDecode} = require('./html');
@@ -311,6 +311,7 @@ class Feed extends EventEmitter {
     dataSource(this.filters)
       .then(this.options.tpl.isFulfilledPassthrough())
 			.then((result) => {
+				console.log("Data Store Query", result);
 				if ( this.options.sort ) {
 					return result.sort(this.options.sort);
 				}
@@ -467,13 +468,14 @@ class CartFeed extends Feed {
 }
 
 class DataStore extends EventEmitter {
-	constructor(data, queryFn) {
+	constructor(data, queryFn, formatFn) {
 		super();
 
 		this._data = data || [];
 		this._lastQueryArgs = null;
 		this._lastFilter = null;
 		this._queryFn = queryFn;
+		this._formatFn = formatFn;
 		this._lastQuery = null;
 		this._eventsOff = 0;
 	}
@@ -515,7 +517,11 @@ class DataStore extends EventEmitter {
 				.then((resp) => {
 					this._data = resp;
 					this.emit("refresh", this)
-					return this._data;
+					if ( this._formatFn ) {
+						return this._formatFn(this._data)
+					}
+
+					return resp;
 				})
 
 			return this._lastQuery;
@@ -535,7 +541,7 @@ class DataStore extends EventEmitter {
 	update(data) {
 		var row = _.find(this._data, { id: data.id });
 		if ( row ) {
-			_.extend(row, data);
+			_.merge(row, data);
 			this.emit("update", this, row)
 		} else {
 			this._data.push(data)
@@ -559,7 +565,7 @@ class DataStore extends EventEmitter {
 class AwesomeCart extends EventEmitter {
   constructor() {
     super()
-    this._cart = new DataStore([], this.fetchCartItems.bind(this))
+    this._cart = new DataStore([], this._queryCart.bind(this), this.fetchCartItems.bind(this))
     this._lastTotalCount = 0
     this._lastTotalItems = 0
 
@@ -650,8 +656,19 @@ class AwesomeCart extends EventEmitter {
 		return this.storeAdapter.sessionAction('updateItem', [payload])
 			.then((result) => {
 				console.log('updateCart', result);
-				this._updateBulkCartData(result);
-				this._emitUpdated();
+				if ( result.shipping_rates ) {
+					var hash = JSON.stringify(result.shipping_rates);
+					if ( this._shipping_rates_cache != hash ) {
+						this._shipping_rates_cache = hash;
+						this.emit("shipping_rates", result.shipping_rates);
+					}
+				}
+
+				this._updateBulkCartData(result)
+					.then(() => {
+						this._emitUpdated();
+					})
+
 			})
 	}
 
@@ -688,10 +705,12 @@ class AwesomeCart extends EventEmitter {
 								var item = {
 									product: product,
 									qty: itm.qty,
-									options: itm.options,
 									id: itm.id,
 									unit: product.price,
 									total: product.price * itm.qty
+								}
+								if ( itm.options ) {
+									item.options = itm.options
 								}
 								// update cart item with product detail
 								this._cart.update(item)
@@ -775,6 +794,11 @@ class AwesomeCart extends EventEmitter {
     this.options.feeds[name] = new CartFeed(this, name, options)
     this.options.feeds[name].on('updated', this.updateUI.bind(this))
   }
+
+	_queryCart(filters) {
+		// dymmy query fn for now, need to implement filtering
+		return new Promise((resolve) => { resolve(this._cart.data); })
+	}
 
   fetchCartItems(filters) {
     return new Promise((resolve, reject) => {
@@ -1209,6 +1233,20 @@ class AwesomeCart extends EventEmitter {
     })
   }
 
+	calculate_shipping(rate_name, address) {
+		return this.storeAdapter.sessionAction("calculate_shipping", { name: rate_name, address: address })
+		.then((data) => {
+			var hash = JSON.stringify(data.shipping_rates);
+			if ( this._shipping_rates_cache != hash ) {
+				this._shipping_rates_cache = hash;
+				this.emit("shipping_rates", data.shipping_rates);
+			}
+
+			this._emitUpdated()
+			return data;
+		})
+	}
+
   getProductBySKU(sku) {
     return this.storeAdapter.getProductBySKU(sku)
   }
@@ -1278,45 +1316,6 @@ class AwesomeCart extends EventEmitter {
 	            return true;
 						})
 
-					/*
-          // rebuilding cart from session data
-          var jobs = []
-
-          for(var i in resp.data.items) {
-            var itm = resp.data.items[i]
-
-            jobs.push(function(itm) {
-
-              return this.storeAdapter.getProductBySKU(itm.sku)
-                .then((product) => {
-                  if ( product ) {
-
-                    var item = {
-                      product: product,
-                      qty: itm.qty,
-                      options: itm.options,
-                      id: itm.id,
-                      unit: product.price,
-                      total: product.price * itm.qty
-                    }
-
-                    this._cart.data.push(item)
-                    return item;
-                  }
-
-                  return false;
-                });
-
-            }.bind(this, itm)())
-          }
-
-          return Promise.join.apply(Promise, jobs).then(() => {
-            // we are ready to go, kick off feeds
-            this.emit('init')
-            // update all feeds of new data
-            this._emitUpdated()
-            return true;
-          })*/
         } else {
           return false;
         }
@@ -1349,6 +1348,10 @@ function delayedTpl(id, tpl_name, obj) {
 
     obj.$parent.updateWaitFor(tpl_promise)
 }
+
+Handlebars.registerHelper("not", function(value, scope) {
+  return value?false:true;
+})
 
 Handlebars.registerHelper("eq", function(left, right, scope) {
   return left == right;
