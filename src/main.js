@@ -13,7 +13,7 @@ const queryString = require('query-string')
 //const uuid = require('node-uuid')
 const _ = require('lodash')
 
-// promisify ajax request types
+// promisify ajax request type
 xhr.get = Promise.promisify(xhr.get)
 xhr.post = Promise.promisify(xhr.post)
 
@@ -312,7 +312,6 @@ class Feed extends EventEmitter {
 		dataSource(this.filters)
 			.then(this.options.tpl.isFulfilledPassthrough())
 			.then((result) => {
-				console.log("Data Store Query", result);
 				if ( this.options.sort ) {
 					return result.sort(this.options.sort);
 				}
@@ -656,7 +655,6 @@ class AwesomeCart extends EventEmitter {
 
 		return this.storeAdapter.sessionAction('updateItem', [payload])
 			.then((result) => {
-				console.log('updateCart', result);
 				if ( result.shipping_rates ) {
 					var hash = JSON.stringify(result.shipping_rates);
 					if ( this._shipping_rates_cache != hash ) {
