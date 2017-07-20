@@ -1003,7 +1003,6 @@ class AwesomeCart extends EventEmitter {
 				var btn_options = {};
 				addClass(btn, 'awc-bound')
 
-
 				var validate_btn = this._validateAddToCartBtn.bind(this, btn, btn_options);
 				btn_options.validate = validate_btn;
 
@@ -1095,7 +1094,7 @@ class AwesomeCart extends EventEmitter {
 					}
 				}
 
-				btn.addEventListener('click', validate_btn)
+				btn.addEventListener('click', this._onAddToCartClick.bind(this, btn_options));
 
 				validate_btn()
 			}
@@ -1135,6 +1134,9 @@ class AwesomeCart extends EventEmitter {
 	}
 
 	_onAddToCartClick(btn_options, e) {
+
+		btn_options.validate(e);
+
 		var btn = e.target;
 		var sku = htmlDecode(btn.dataset.id);
 		var qty = btn.dataset.qty || btn.dataset.awcQty || undefined;
