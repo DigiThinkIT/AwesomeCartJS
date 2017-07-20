@@ -149,7 +149,7 @@ module.exports = {
   },
 
 	removeClass: function(el, cls) {
-		el.classList.remove("CLASS_NAME");
+		el.classList.remove(cls);
 	},
 
   hasAttr: function(el, attr) {

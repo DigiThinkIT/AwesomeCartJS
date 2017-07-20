@@ -705,8 +705,8 @@ class AwesomeCart extends EventEmitter {
 									product: product,
 									qty: itm.qty,
 									id: itm.id,
-									unit: product.price,
-									total: product.price * itm.qty
+									unit: itm.unit,
+									total: itm.total
 								}
 								if ( itm.options ) {
 									item.options = itm.options
@@ -736,6 +736,10 @@ class AwesomeCart extends EventEmitter {
 			debug.error("Error while updating cart items")
 			debug.error(err)
 		})
+	}
+
+	formatCurrency(price) {
+		return this.storeAdapter.formatCurrency(price);
 	}
 
 	template(name) {
@@ -928,22 +932,62 @@ class AwesomeCart extends EventEmitter {
 		}
 		var hash = optionHash.join(',')
 		var sku = data.hashes[hash]
+		var price_selector = data.price_selector
 		// update sku on add to cart button
 		setAttr(data.btn, 'data-id', sku)
 
-		this._validateChildOptions(data, selectorIdx, optionHash);
-
-		if ( sku === undefined ) {
-			addClass(data.btn, 'disabled');
-			addClass(data.btn, 'btn-disabled');
-		} else {
-			removeClass(data.btn, 'disabled');
-			removeClass(data.btn, 'btn-disabled');
+		if ( price_selector ) {
+			var priceEls = queryAll(price_selector);
+			if ( priceEls.length > 0 ) {
+				var priceEl = priceEls[0];
+				this.getProductBySKU(sku)
+					.then((p) => {
+						debug.log(p)
+						priceEl.textContent = this.storeAdapter.formatCurrency(p.price);
+						return p;
+					})
+			}
 		}
+
+
+		this._validateChildOptions(data, selectorIdx, optionHash);
+		data.validate()
+
 	}
 
 	_onAdjustQtyChange(el, options, e) {
 		this._cart.update({ id: options.item_id, qty: parseInt(el.value) });
+	}
+
+	_validateAddToCartBtn(btn, btn_options) {
+
+		var sku = getAttr(btn, 'data-id');
+		var valid = true;
+
+		if ( sku === undefined ) {
+			valid = false;
+		}
+
+		if ( btn_options.custom_fields ) {
+			for(var i=0; i < btn_options.custom_fields.length; i++) {
+				var field = btn_options.custom_fields[i];
+				if ( field.required ) {
+					var field_value = field.el.value;
+					if ( !field_value ) {
+						valid = false;
+					}
+				}
+			}
+		}
+
+		if ( !valid ) {
+			addClass(btn, 'disabled');
+			addClass(btn, 'btn-disabled');
+		} else {
+			removeClass(btn, 'disabled');
+			removeClass(btn, 'btn-disabled');
+		}
+
 	}
 
 	/**
@@ -956,8 +1000,13 @@ class AwesomeCart extends EventEmitter {
 		for(var i = 0; i < addToCartElems.length; i++) {
 			var btn = addToCartElems[i]
 			if ( !hasClass(btn, 'awc-bound') ) {
-				btn.addEventListener('click', this._onAddToCartClick.bind(this))
+				var btn_options = {};
 				addClass(btn, 'awc-bound')
+
+
+				var validate_btn = this._validateAddToCartBtn.bind(this, btn, btn_options);
+				btn_options.validate = validate_btn;
+
 				// track id value from selector and update this btn data-awc-id value
 				// on changes
 				if ( hasAttr(btn, 'data-awc-id-from') ) {
@@ -971,9 +1020,11 @@ class AwesomeCart extends EventEmitter {
 
 				if ( hasAttr(btn, 'data-awc-options') ) {
 					var optionData = {
+						price_selector: getAttr(btn, 'data-awc-price-selector'),
 						selectors: getAttr(btn, 'data-awc-options-selectors').split(',').filter((n) => { return n != undefined && n != "" }),
 						hashes: JSON.parse(getAttr(btn, 'data-awc-options-hashes')),
-						btn: btn
+						btn: btn,
+						validate: validate_btn
 					}
 
 					var firstEl = null;
@@ -996,6 +1047,57 @@ class AwesomeCart extends EventEmitter {
 					// trigger change event to make sure our sku ids are set for default selections
 					this._onOptionElChange.bind(this, firstEl, optionData)();
 				}
+
+				if ( hasAttr(btn, 'data-awc-qty-from') ) {
+					// makes sure to validate qty fields
+					var qty_from = btn.dataset.awcQtyFrom; // data-awc-qty-from
+					var els = [];
+
+					try {
+						els = queryAll(qty_from)
+					} catch(err) {
+						debug.error(err);
+					}
+					if ( els.length > 0 ) {
+						els[0].addEventListener('change', function(e) {
+							var qty = parseInt(e.target.value); // get qty from referenced element
+							if ( isNaN(qty) ) {
+								qty = 1;
+							}
+							e.target.value = qty;
+						})
+					}
+				}
+
+				// ex: data-awc-custom-fields="#myfields-container"
+				if ( hasAttr(btn, 'data-awc-custom-fields') ) {
+					var fields = btn.dataset.awcCustomFields;
+					try {
+						// find all custom fields inside container
+						els = queryAll(fields+" [data-awc-custom-field]");
+					} catch(err) {
+						debug.error(err);
+					}
+
+					if ( els.length > 0 ) {
+						var custom_fields = []
+						for(var i=0; i < els.length; i++) {
+							custom_fields.push({
+								field_name: els[i].dataset.awcCustomField,
+								required: els[i].dataset.awcRequired == 'yes',
+								el: els[i]
+							})
+
+							els[i].addEventListener("change", validate_btn);
+						}
+
+						btn_options["custom_fields"] = custom_fields;
+					}
+				}
+
+				btn.addEventListener('click', validate_btn)
+
+				validate_btn()
 			}
 		}
 
@@ -1032,13 +1134,13 @@ class AwesomeCart extends EventEmitter {
 
 	}
 
-	_onAddToCartClick(e) {
+	_onAddToCartClick(btn_options, e) {
 		var btn = e.target;
 		var sku = htmlDecode(btn.dataset.id);
 		var qty = btn.dataset.qty || btn.dataset.awcQty || undefined;
 
 		if ( qty === undefined ) {
-			var qty_from = btn.dataset.awcQtyFrom;
+			var qty_from = btn.dataset.awcQtyFrom; // data-awc-qty-from
 			var els = [];
 
 			try {
@@ -1049,6 +1151,10 @@ class AwesomeCart extends EventEmitter {
 
 			if ( els.length > 0 ) {
 				qty = parseInt(els[0].value); // get qty from referenced element
+				if ( isNaN(qty) ) {
+					qty = 1;
+				}
+				els[0].value = qty;
 			} else {
 				debug.warn("Could not get qty from ", qty_from);
 				qty = 1; // default to 1
@@ -1064,6 +1170,23 @@ class AwesomeCart extends EventEmitter {
 
 		if ( options && options instanceof String ) {
 			options = queryString.parse(options)
+		}
+
+
+		if ( btn_options.custom_fields ) {
+			if ( !options ) {
+				options = { };
+			}
+
+			if ( !options.custom ) {
+				options["custom"] = {};
+			}
+
+			for(var i=0; i < btn_options.custom_fields.length; i++) {
+				var field = btn_options.custom_fields[i];
+				var field_value = field.el.value;
+				options.custom[field.field_name] = field_value;
+			}
 		}
 
 		this.addToCart(sku, qty, options)
@@ -1161,22 +1284,21 @@ class AwesomeCart extends EventEmitter {
 				// now send bulk action
 				return this.storeAdapter.sessionAction('addToCart', payload)
 					.then((resp) => {
-						for(var i in resp) {
-							for(var j in items) {
-								if ( items[j].id == resp[i].old_id ) {
-									// update local cart info with adapter data
+						for(var i in resp.data) {
+							var resp_item = resp.data[i];
 
-									items[j].id = resp[i].id;
-									items[j].qty = resp[i].qty;
-									items[j].sku = resp[i].sku;
-									items[j].options = resp[i].options;
+							var itm = null;
+							itm = base._cart.find({ id: resp_item.old_id })
 
-									if ( items[j].id != resp[i].old_id ) {
-										items_added.push(items[j]);
-									}
-									break;
-								}
+							if ( itm ) {
+								itm.id = resp_item.id;
+								itm.qty = resp_item.qty;
+								itm.sku = resp_item.sku;
+								itm.options = resp_item.options;
+								itm.unit = resp_item.unit;
+								itm.total = resp_item.total;
 							}
+
 						}
 						return resp
 					})
@@ -1186,8 +1308,8 @@ class AwesomeCart extends EventEmitter {
 			})
 			.then(() => {
 				this._emitUpdated()
-				this.emit("after-add-to-cart", items_added)
 				debug.table(this._cart.data);
+				this.emit("add-to-cart-completed")
 				return true
 			})
 	}
@@ -1233,17 +1355,20 @@ class AwesomeCart extends EventEmitter {
 	}
 
 	calculate_shipping(rate_name, address) {
+		// TODO: Deprecate this method for camel case version
+
 		return this.storeAdapter.sessionAction("calculate_shipping", { name: rate_name, address: address })
 		.then((data) => {
 			var hash = JSON.stringify(data.shipping_rates);
-			if ( this._shipping_rates_cache != hash ) {
-				this._shipping_rates_cache = hash;
-				this.emit("shipping_rates", data.shipping_rates);
-			}
+			this.emit("shipping_rates", data.shipping_rates, data);
 
 			this._emitUpdated()
 			return data;
 		})
+	}
+
+	calculateShipping(rate_name, address) {
+		return this.calculate_shipping(rate_name, address);
 	}
 
 	getProductBySKU(sku) {
@@ -1397,7 +1522,11 @@ Handlebars.registerHelper("json", function(value, scope) {
 })
 
 Handlebars.registerHelper('escape', function(value, scope) {
-	return value.replace(/(['"])/g, '\\$1');
+	if ( value ) {
+		return value.replace(/(['"])/g, '\\$1');
+	}
+
+	return "";
 })
 
 Handlebars.registerHelper('htmlEncode', function(value, scope) {
@@ -1409,7 +1538,11 @@ Handlebars.registerHelper('htmlDecode', function(value, scope) {
 })
 
 Handlebars.registerHelper('cssEscape', function(value, scope) {
-	return value.replace(/[^a-z0-9]/gi, '_')
+	if ( value ) {
+		return value.replace(/[^a-z0-9\-]/gi, '_')
+	}
+
+	return "";
 })
 
 Handlebars.registerHelper('eachEven', function(arr, scope) {
@@ -1459,6 +1592,11 @@ Handlebars.registerHelper('currency', function(value, scope) {
 	return context.$cart.storeAdapter.formatCurrency(value)
 })
 
+Handlebars.registerHelper("jsinclude", function(src, scope) {
+	module.exports.require(src);
+	return '';
+})
+
 module.exports = {
 	debug: debug,
 	AwesomeCart: AwesomeCart,
@@ -1501,7 +1639,8 @@ module.exports = {
 	post: xhr.post,
 	Template: Template,
 	htmlEncode: htmlEncode,
-	htmlDecode: htmlDecode
+	htmlDecode: htmlDecode,
+	_: _
 }
 
 // To be deprecated
