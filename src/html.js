@@ -10,6 +10,10 @@
 
 module.exports = {
 	htmlEncode: function(value) {
+		if ( value === undefined || value === null ) {
+			value = "";
+		}
+
 		return value.
 				replace(/&/g, '&amp;').
 				replace(SURROGATE_PAIR_REGEXP, function(value) {
@@ -24,7 +28,9 @@ module.exports = {
 				replace(/>/g, '&gt;');
 	},
 	htmlDecode: function(value) {
-		if (!value) { return ''; }
+		if ( value === undefined || value === null ) {
+			value = "";
+		}
 
 		value = value.replace(/</g,"&lt;");
 		hiddenPre.innerHTML = value;
