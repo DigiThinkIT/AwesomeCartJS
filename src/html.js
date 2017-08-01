@@ -37,9 +37,42 @@ module.exports = {
 		var result = hiddenPre.textContent;
 		return result;
 	},
+	
 	queryEscape: function(value) {
 		if (!value) { return []; }
 		var result = value.replace(/#(\d)/, "#\\3$1 ");
 		return result;
+	},
+
+	hasClass: function(el, cls) {
+    return (` ${el.className} `).indexOf(` ${cls} `) > -1
+  },
+
+  addClass: function(el, cls) {
+    el.className += ` ${cls}`
+  },
+
+	removeClass: function(el, cls) {
+		el.classList.remove(cls);
+	},
+
+  hasAttr: function(el, attr) {
+    return el.hasAttribute(attr)
+  },
+
+  getAttr: function(el, attr) {
+    return htmlDecode(el.getAttribute(attr));
+  },
+
+  setAttr: function(el, attr, value) {
+    el.setAttribute(attr, value);
+  },
+
+	queryAll: function(query, context) {
+		if ( context === undefined ) {
+			context = document;
+		}
+
+		return context.querySelectorAll(queryEscape(query));
 	}
 }

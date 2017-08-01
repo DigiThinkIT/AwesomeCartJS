@@ -3,7 +3,9 @@
  * @module utils
  */
 
- const {htmlEncode, htmlDecode, queryEscape} = require('./html');
+const {htmlEncode, htmlDecode, queryEscape} = require('./html');
+const debug = require('./debug');
+var _required = {};
 
 var xhrLib = {
   get: function(data, callback) {
@@ -140,121 +142,28 @@ module.exports = {
     return ret;
   },
 
-  hasClass: function(el, cls) {
-    return (` ${el.className} `).indexOf(` ${cls} `) > -1
-  },
+	require: function(url) {
+		 if ( url in _required ) {
+			 return _required[url];
+		 }
 
-  addClass: function(el, cls) {
-    el.className += ` ${cls}`
-  },
+		_required[url] = module.exports.get(url)
+			.then((data) => {
+				var el, ext = url.split('.').splice(-1);
+				if ( ext == "js" ) {
+					el = document.createElement('script');
+				} else if ( ext == "css" ) {
+					el = document.createElement('style');
+				} else if ( ext == "json" ) {
+					data = JSON.parse(data.body);
+				}
 
-	removeClass: function(el, cls) {
-		el.classList.remove(cls);
-	},
-
-  hasAttr: function(el, attr) {
-    return el.hasAttribute(attr)
-  },
-
-  getAttr: function(el, attr) {
-    return htmlDecode(el.getAttribute(attr));
-  },
-
-  setAttr: function(el, attr, value) {
-    el.setAttribute(attr, value);
-  },
-
-	queryAll: function(query, context) {
-		if ( context === undefined ) {
-			context = document;
-		}
-
-		return context.querySelectorAll(queryEscape(query));
-	},
-
-  debug: {
-    LEVEL: {
-      NONE: 0,
-      LOG: 1,
-      INFO: 2,
-      WARN: 3,
-      ERROR: 4,
-      DEBUG: 5
-    },
-    level: 0,
-    group: function(label, fn) {
-      var val = undefined;
-      if ( console.group !== undefined ) {
-        console.group(label);
-        try {
-          val = fn();
-        } catch(ex) {
-          module.exports.debug.error(ex);
-          console.groupEnd();
-          throw ex;
-        }
-        console.groupEnd();
-      } else {
-        try{
-          val = fn();
-        } catch(ex) {
-          module.exports.debug.error(ex);
-          console.groupEnd();
-          throw ex;
-        }
-      }
-
-      return val;
-    },
-
-    log: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.LOG ) {
-        if ( console.log !== undefined ) {
-          console.log.apply(console, Array.from(arguments));
-        }
-      }
-    },
-
-    info: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.INFO  ) {
-        if ( console.log !== undefined ) {
-          console.info.apply(console, Array.from(arguments));
-        }
-      }
-    },
-
-    error: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.ERROR  ) {
-        if ( console.error !== undefined ) {
-          console.error.apply(console, Array.from(arguments));
-        }
-      }
-    },
-
-    warn: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.WARN  ) {
-        if ( console.warn !== undefined ) {
-          console.warn.apply(console, Array.from(arguments));
-        }
-      }
-    },
-
-    debug: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.DEBUG  ) {
-        if ( console.debug !== undefined ) {
-          console.debug.apply(console, Array.from(arguments));
-        }
-      }
-    },
-
-    table: function() {
-      if ( module.exports.debug.level >= module.exports.debug.LEVEL.DEBUG  ) {
-        if ( console.table !== undefined ) {
-          console.table.apply(console, Array.from(arguments));
-        }
-      }
-    }
-
-  }
-
+				if ( el ) {
+					el.appendChild(document.createTextNode(data.body));
+					document.getElementsByTagName('head')[0].appendChild(el);
+				}
+				return data;
+			});
+		 return _required[url];
+	}
 }
