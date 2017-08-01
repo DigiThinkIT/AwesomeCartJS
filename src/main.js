@@ -6,10 +6,12 @@ require("babel-polyfill"); // polyfill for browsers missing features
 const {log, error} = require('./debug');
 const {sargs, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, debug, xhr, uuid} = require('./utils');
 const {htmlEncode, htmlDecode} = require('./html');
+const ErrorsLib = require('./errors');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
 const Handlebars = require('handlebars')
 const queryString = require('query-string')
+
 //const uuid = require('node-uuid')
 const _ = require('lodash')
 
@@ -1634,6 +1636,7 @@ module.exports = {
 		}
 		return args;
 	},
+	Errors: ErrorsLib,
 	Handlebars: Handlebars,
 	Promise: Promise,
 	uuid: uuid,
