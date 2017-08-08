@@ -6,25 +6,21 @@ require("babel-polyfill"); // polyfill for browsers missing features
 const debug = require('./debug');
 const {log, error} = debug;
 const utils = require('./utils')
-const {sargs, xhr, uuid} = utils;
+const {sargs, xhr, uuid, ProgressTracker} = utils;
 const {htmlEncode, htmlDecode, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr} = require('./html');
 const ErrorsLib = require('./errors');
 const Templating = require('./templating');
+const {Template} = Templating;
 const {Feed, ProductFeed, CartFeed} = require('./feeds');
 const {DataStore} = require('./DataStore');
-const {Template} = Templating;
 const {StoreAdapter, DemoStoreaAdapter} = require('./adapters');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
-const Handlebars = require('handlebars')
+//const Handlebars = require('handlebars')
 const queryString = require('query-string')
 
 //const uuid = require('node-uuid')
 const _ = require('lodash')
-
-// promisify ajax request type
-xhr.get = Promise.promisify(xhr.get)
-xhr.post = Promise.promisify(xhr.post)
 
 /**
  * The main cart class. All managing of shopping cart happens here.
@@ -149,7 +145,6 @@ class AwesomeCart extends EventEmitter {
 	_updateBulkCartData(data) {
 		// we expect data to look like:
 		// { data: [<array of items>], removed: [<array of removed ids>]}
-
 		var jobs = []
 
 		this._cart.eventsOff();
@@ -928,6 +923,7 @@ module.exports = {
 	DemoStoreaAdapter: DemoStoreaAdapter,
 	StoreAdapter: StoreAdapter,
 	DataStore: DataStore,
+	ProgressTracker: ProgressTracker,
 	loadTemplate: function(url) {
 		if ( typeof url == "string" ) {
 			return xhr.get(url).then((resp) => {

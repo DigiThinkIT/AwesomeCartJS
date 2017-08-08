@@ -1,3 +1,4 @@
+const {htmlEncode, htmlDecode} = require('./html');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const utils = require('./utils')
 const Handlebars = require('handlebars')
@@ -39,7 +40,8 @@ class Template extends EventEmitter {
 
 		return tpl(Object.assign({
 			$cart: this._cart,
-			$parent: this
+			$parent: this,
+			$tpl: this
 		},context))
 	}
 
@@ -60,6 +62,26 @@ class Template extends EventEmitter {
 			resolve(true);
 		});
 
+	}
+
+	delayedTpl(id, tpl_name, obj) {
+		var t = this._cart.template(tpl_name);
+		var tpl_promise = t
+			.promiseReady()
+			.then((tpl) => {
+				var html = tpl.beginRender(obj)
+				var container = document.getElementById(id)
+				if ( container ) {
+					container.innerHTML = html
+					container.className = "awc-placeholder loaded"
+
+					return tpl.endRender();
+				} else {
+					return false;
+				}
+			})
+
+			obj.$parent.updateWaitFor(tpl_promise)
 	}
 
 	isFulfilledPassthrough(data) {
@@ -88,26 +110,6 @@ class Template extends EventEmitter {
 			}
 		}
 	}
-}
-
-function delayedTpl(id, tpl_name, obj) {
-	var t = cart.template(tpl_name);
-	var tpl_promise = t
-		.promiseReady()
-		.then((tpl) => {
-			var html = tpl.beginRender(obj)
-			var container = document.getElementById(id)
-			if ( container ) {
-				container.innerHTML = html
-				container.className = "awc-placeholder loaded"
-
-				return tpl.endRender();
-			} else {
-				return false;
-			}
-		})
-
-		obj.$parent.updateWaitFor(tpl_promise)
 }
 
 Handlebars.registerHelper("not", function(value, scope) {
@@ -148,9 +150,10 @@ Handlebars.registerHelper("and", function(left, right, scope) {
 
 Handlebars.registerHelper("template", function(tpl_name, obj, scope) {
 	var id = awc.uuid()
-	obj.$cart = scope.data.root.$cart
-	obj.$parent = scope.data.root.$parent
-	delayedTpl(id, tpl_name, obj)
+	obj.$cart = scope.data.root.$cart;
+	obj.$parent = scope.data.root.$parent;
+	obj.$tpl = scope.data.root.$tpl;
+	obj.$tpl.delayedTpl(id, tpl_name, obj)
 	return '<div id="'+id+'" class="awc-placeholder loading"></div>';
 })
 

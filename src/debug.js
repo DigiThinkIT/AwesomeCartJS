@@ -17,7 +17,7 @@ module.exports = {
 			try {
 				val = fn();
 			} catch(ex) {
-				module.exports.debug.error(ex);
+				module.exports.error(ex);
 				console.groupEnd();
 				throw ex;
 			}
@@ -26,7 +26,7 @@ module.exports = {
 			try{
 				val = fn();
 			} catch(ex) {
-				module.exports.debug.error(ex);
+				module.exports.error(ex);
 				console.groupEnd();
 				throw ex;
 			}
@@ -36,7 +36,7 @@ module.exports = {
 	},
 
 	log: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.LOG ) {
+		if ( module.exports.level >= module.exports.LEVEL.LOG ) {
 			if ( console.log !== undefined ) {
 				console.log.apply(console, Array.from(arguments));
 			}
@@ -44,7 +44,7 @@ module.exports = {
 	},
 
 	info: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.INFO  ) {
+		if ( module.exports.level >= module.exports.LEVEL.INFO  ) {
 			if ( console.log !== undefined ) {
 				console.info.apply(console, Array.from(arguments));
 			}
@@ -52,7 +52,7 @@ module.exports = {
 	},
 
 	error: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.ERROR  ) {
+		if ( module.exports.level >= module.exports.LEVEL.ERROR  ) {
 			if ( console.error !== undefined ) {
 				console.error.apply(console, Array.from(arguments));
 			}
@@ -60,7 +60,7 @@ module.exports = {
 	},
 
 	warn: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.WARN  ) {
+		if ( module.exports.level >= module.exports.LEVEL.WARN  ) {
 			if ( console.warn !== undefined ) {
 				console.warn.apply(console, Array.from(arguments));
 			}
@@ -68,7 +68,7 @@ module.exports = {
 	},
 
 	debug: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.DEBUG  ) {
+		if ( module.exports.level >= module.exports.LEVEL.DEBUG  ) {
 			if ( console.debug !== undefined ) {
 				console.debug.apply(console, Array.from(arguments));
 			}
@@ -76,7 +76,7 @@ module.exports = {
 	},
 
 	table: function() {
-		if ( module.exports.debug.level >= module.exports.debug.LEVEL.DEBUG  ) {
+		if ( module.exports.level >= module.exports.LEVEL.DEBUG  ) {
 			if ( console.table !== undefined ) {
 				console.table.apply(console, Array.from(arguments));
 			}

@@ -2,8 +2,11 @@ const debug = require('./debug');
 const {log, error} = debug;
 const utils = require('./utils')
 const {sargs, xhr, uuid} = utils;
+const {Feed, ProductFeed, CartFeed} = require('./feeds');
+const {DataStore} = require('./DataStore');
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
+const _ = require('lodash')
 
 
 /**

@@ -37,7 +37,7 @@ module.exports = {
 		var result = hiddenPre.textContent;
 		return result;
 	},
-	
+
 	queryEscape: function(value) {
 		if (!value) { return []; }
 		var result = value.replace(/#(\d)/, "#\\3$1 ");
@@ -61,7 +61,7 @@ module.exports = {
   },
 
   getAttr: function(el, attr) {
-    return htmlDecode(el.getAttribute(attr));
+    return module.exports.htmlDecode(el.getAttribute(attr));
   },
 
   setAttr: function(el, attr, value) {
@@ -73,6 +73,6 @@ module.exports = {
 			context = document;
 		}
 
-		return context.querySelectorAll(queryEscape(query));
+		return context.querySelectorAll(module.exports.queryEscape(query));
 	}
 }

@@ -4,6 +4,7 @@ const utils = require('./utils')
 const {sargs, xhr, uuid} = utils;
 const EventEmitter = require('eventemitter2').EventEmitter2;
 const Promise = require('BlueBird')
+const _ = require('lodash')
 
 class DataStore extends EventEmitter {
 	constructor(data, queryFn, formatFn) {
