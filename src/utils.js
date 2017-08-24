@@ -255,6 +255,31 @@ module.exports = {
 		return ret;
 	},
 
+  /**
+	 * Helper utility to wrap an existing function with a before and after fn.
+	 * The before fn takes the same arguments as fn.
+	 * The after fn takes the fn's result and arguments(as an array) and MUST
+	 * return a result value to override the fn's own result value.
+	 */
+	wrap: function(base, before, fn, after) {
+		if ( !fn ) {
+			fn = function() {};
+		}
+
+		return function() {
+			if ( before ) {
+				before.apply(base, arguments);
+			}
+
+			var result = fn.apply(base, arguments);
+
+			if ( after ) {
+				result = after.apply(base, result, arguments);
+			}
+			return result;
+		};
+	},
+
 	require: function(url) {
 
 		var requestData = null;

@@ -924,6 +924,7 @@ module.exports = {
 	StoreAdapter: StoreAdapter,
 	DataStore: DataStore,
 	ProgressTracker: ProgressTracker,
+	utils: utils,
 	loadTemplate: function(url) {
 		if ( typeof url == "string" ) {
 			return xhr.get(url).then((resp) => {
