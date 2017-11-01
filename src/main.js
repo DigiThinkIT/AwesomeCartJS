@@ -7,7 +7,7 @@ const debug = require('./debug');
 const {log, error} = debug;
 const utils = require('./utils')
 const {sargs, xhr, uuid, ProgressTracker} = utils;
-const {htmlEncode, htmlDecode, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr} = require('./html');
+const {htmlEncode, htmlDecode, queryAll, hasClass, addClass, removeClass, hasAttr, setAttr, getAttr, queryFirst} = require('./html');
 const ErrorsLib = require('./errors');
 const Templating = require('./templating');
 const {Template} = Templating;
@@ -456,7 +456,7 @@ class AwesomeCart extends EventEmitter {
 	 * Updates click event references and overall UI handling
 	 */
 	updateUI() {
-
+		var base = this;
 		// data-awc-addtocart magic attribute
 		var addToCartElems = queryAll('[data-awc-addtocart]');
 		for(var i = 0; i < addToCartElems.length; i++) {
@@ -560,6 +560,7 @@ class AwesomeCart extends EventEmitter {
 
 				validate_btn()
 			}
+
 		}
 
 		// data-awc-removefromcart magic attribute
@@ -592,6 +593,67 @@ class AwesomeCart extends EventEmitter {
 				addClass(el, 'awc-bound')
 			}
 		}
+
+		// ex: data-awc-coupon-apply="#awc_coupon"
+		queryAll('[data-awc-coupon-apply]')
+			.forEach(function(el, i) {
+				if ( !hasClass(el, "awc-bound") ) {
+					addClass(el, "awc-bound");
+					el.addEventListener("click", function(e) {
+						var input = queryFirst(e.target.dataset.awcCouponApply);
+						if ( input ) {
+							var coupon = input.value;
+							base.applyCoupon(coupon)
+								.then((r) => {
+									if ( e.target.dataset.awcOnSuccess ) {
+										var onSuccessFnStr = e.target.dataset.awcOnSuccess.split('.');
+										var fn = window;
+										try {
+											onSuccessFnStr.forEach((p, i) => {
+												fn = fn[p];
+											});
+
+											if ( typeof fn === "function" ) {
+												fn(r);
+											}
+										} catch(ex) {
+											debug.error(ex);
+										}
+									}
+
+									return r;
+								})
+								.catch((err) =>{
+									if ( e.target.dataset.awcOnReject ) {
+										var onRejectFnStr = e.target.dataset.awcOnReject.split('.');
+										var fn = window;
+										try {
+											onRejectFnStr.forEach((p, i) => {
+												fn = fn[p];
+											});
+
+											if ( typeof fn === "function" ) {
+												fn(err);
+											}
+										} catch(ex) {
+											debug.error(ex);
+										}
+									}
+								})
+						}
+					});
+				}
+			});
+
+		queryAll('[data-awc-coupon-remove]')
+			.forEach(function(el, i) {
+				if ( !hasClass(el, "awc-bound") ) {
+					addClass(el, "awc-bound");
+					el.addEventListener("click", function(e) {
+						base.removeCoupon();
+					});
+				}
+			});
 
 	}
 
@@ -676,6 +738,26 @@ class AwesomeCart extends EventEmitter {
 
 	adjustQty(id, qty) {
 		this._cart.update({ id: id, qty: qty})
+	}
+
+	applyCoupon(coupon) {
+		this.coupon_code = coupon;
+		return this.storeAdapter.sessionAction("applyCoupon", [coupon])
+			.then(() => {
+				this._emitUpdated();
+				this.emit("coupon-applied");
+				return true;
+			});
+	}
+
+	removeCoupon() {
+		this.coupon_code = null;
+		return this.storeAdapter.sessionAction("removeCoupon", [])
+			.then(() => {
+				this._emitUpdated();
+				this.emit("coupon-removed");
+				return true;
+			});
 	}
 
 	/**
