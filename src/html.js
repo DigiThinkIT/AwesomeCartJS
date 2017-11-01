@@ -49,7 +49,7 @@ module.exports = {
   },
 
   addClass: function(el, cls) {
-    el.className += ` ${cls}`
+		el.classList.add(cls);
   },
 
 	removeClass: function(el, cls) {
@@ -74,5 +74,14 @@ module.exports = {
 		}
 
 		return context.querySelectorAll(module.exports.queryEscape(query));
+	},
+
+	queryFirst: function(query, context) {
+		var result = module.exports.queryAll(query, context);
+		if ( result.length > 0 ) {
+			return result[0];
+		}
+
+		return false;
 	}
 }
