@@ -280,6 +280,7 @@ class AwesomeCart extends EventEmitter {
 					options: item.options,
 					product: {
 						name: item.product.name,
+						sku: item.product.sku,
 						imageUrl: item.product.imageUrl
 					},
 					subgroups: []
@@ -765,6 +766,7 @@ class AwesomeCart extends EventEmitter {
 	 * @param sku string      The product sku to track in the cart.
 	 * @param qty int         The product qty to add to cart.
 	 * @param options object  Customization options associated with product
+	 * @param replaces string The cart id of a product to replace
 	 */
 	addToCart() {
 		var base = this;
@@ -786,7 +788,8 @@ class AwesomeCart extends EventEmitter {
 			var args = sargs(arg_item,
 				{ arg: 'sku', required: 1 },
 				{ arg: 'qty', default: 1 },
-				{ arg: 'options', default: {} }
+				{ arg: 'options', default: {} },
+				{ arg: 'replaces', default: '' }
 			);
 
 			// isolate to keep references from messing with each other
@@ -811,6 +814,7 @@ class AwesomeCart extends EventEmitter {
 								id: item.id,
 								qty: item.qty,
 								sku: item.product.sku,
+								replaces: args.replaces,
 								options: item.options || {}
 							})
 
@@ -846,6 +850,15 @@ class AwesomeCart extends EventEmitter {
 							}
 
 						}
+
+						if ( resp.removed ) {
+							for(var resp_idx in resp.removed) {
+								_.remove(base._cart.data, (item) => {
+									return resp.removed.find(function(val) { return val == item.id; })?true:false;
+								})
+							}
+						}
+
 						return resp
 					})
 					.catch((err) => {
@@ -876,17 +889,9 @@ class AwesomeCart extends EventEmitter {
 				).then((resp) => {
 					for(var resp_idx in resp) {
 						var id = resp[resp_idx];
-						var remove_me = null;
-						for(var cart_idx in this._cart.data) {
-							if ( this._cart.data[cart_idx].id == id ) {
-								remove_me = this._cart[cart_idx].id
-								break;
-							}
-						}
-
-						if ( remove_me !== null ) {
-							delete this._cart.data[remove_me];
-						}
+						_.remove(base._cart.data, (item) => {
+							return item.id == id
+						})
 					}
 					debug.info("Server returned success");
 					this._emitUpdated();
@@ -917,8 +922,8 @@ class AwesomeCart extends EventEmitter {
 		return this.calculate_shipping(rate_name, address);
 	}
 
-	getProductBySKU(sku) {
-		return this.storeAdapter.getProductBySKU(sku)
+	getProductBySKU(sku, detailed) {
+		return this.storeAdapter.getProductBySKU(sku, detailed)
 	}
 
 	applyTpl(selector, tpl, data) {
