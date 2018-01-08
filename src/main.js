@@ -720,17 +720,13 @@ class AwesomeCart extends EventEmitter {
 	}
 
 	_onRemoveFromCartClick(e) {
-		debug.group("On Remove From Cart", () => {
-			var btn = e.target;
-			var id = btn.dataset.id;
-			debug.debug("Btn Element: ", btn);
-			debug.debug("Data set id %s", id);
-			this.removeFromCart(id)
-				.catch((err) => {
-					debug.debug(btn, id, btn.dataset)
-					debug.error(err)
-				})
-		})
+		var btn = e.target;
+		var id = btn.dataset.id;
+		this.removeFromCart(id)
+			.catch((err) => {
+				debug.debug(btn, id, btn.dataset)
+				debug.error(err)
+			});
 	}
 
 	validate() {
@@ -852,11 +848,9 @@ class AwesomeCart extends EventEmitter {
 						}
 
 						if ( resp.removed ) {
-							for(var resp_idx in resp.removed) {
-								_.remove(base._cart.data, (item) => {
-									return resp.removed.find(function(val) { return val == item.id; })?true:false;
-								})
-							}
+							base._cart.remove((item) => {
+								return resp.removed.indexOf(item.id) > -1;
+							});
 						}
 
 						return resp
@@ -876,9 +870,9 @@ class AwesomeCart extends EventEmitter {
 	removeFromCart(id) {
 		return new Promise((resolve, reject) => {
 			if ( !id ) {
-				reject("Invalid id")
+				reject("Invalid id");
 			} else {
-				_.remove(this._cart.data, (item) => {
+				this._cart.remove((item) => {
 					return item.id == id;
 				})
 
@@ -887,12 +881,9 @@ class AwesomeCart extends EventEmitter {
 					'removeFromCart',
 					{ id: id }
 				).then((resp) => {
-					for(var resp_idx in resp) {
-						var id = resp[resp_idx];
-						_.remove(base._cart.data, (item) => {
-							return item.id == id
-						})
-					}
+					this._cart.remove((item) => {
+						return resp.removed.indexOf(item.id) > -1;
+					});
 					debug.info("Server returned success");
 					this._emitUpdated();
 					debug.table(this._cart.data);
