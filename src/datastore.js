@@ -91,7 +91,7 @@ class DataStore extends EventEmitter {
 	}
 
 	remove(filter) {
-		var removed = _.remove(this._data, filter )
+		var removed = _.remove(this._data, filter)
 		this.emit("remove", this, removed)
 		return removed;
 	}
