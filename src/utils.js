@@ -281,13 +281,21 @@ module.exports = {
 	},
 
 	require: function(url) {
-
 		var requestData = null;
 		if ( typeof url == "object" ) {
 			requestData = url;
 			url = requestData.url;
 		} else {
 			requestData = { url: url };
+		}
+
+		if ( requestData.nocache ) {
+			requestData.url += "?_nocache=" + Math.floor(Date.now());
+			if ( requestData.headers === undefined ) {
+				requestData.headers = {};
+			}
+
+			requestData.headers["Cache-Control"] = "no-cache";
 		}
 
 		if ( url in _required ) {
