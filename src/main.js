@@ -58,6 +58,15 @@ class AwesomeCart extends EventEmitter {
 	}
 
 	/**
+	 * Returns an object containing discounts applied to products by sku.
+	 * This data is informational at best, meat to be used to break down discounts
+	 * on the cart templates
+	 */
+	get discounts() {
+		return this.storeAdapter.getDiscounts();
+	}
+
+	/**
 	 * Returns total line items in the cart.
 	 * @return int
 	 */
@@ -168,6 +177,7 @@ class AwesomeCart extends EventEmitter {
 									qty: itm.qty,
 									id: itm.id,
 									unit: itm.unit,
+									base_price: itm.base_price,
 									total: itm.total
 								}
 								if ( itm.options ) {
@@ -276,6 +286,7 @@ class AwesomeCart extends EventEmitter {
 					id: item.id,
 					qty: item.qty,
 					unit: item.unit,
+					base_price: item.base_price,
 					total: item.total,
 					options: item.options,
 					product: {
@@ -803,6 +814,7 @@ class AwesomeCart extends EventEmitter {
 								options: args.options,
 								id: uuid(),
 								unit: product.price,
+								base_price: product.base_price,
 								total: product.price * args.qty
 							})
 
@@ -842,6 +854,7 @@ class AwesomeCart extends EventEmitter {
 								itm.sku = resp_item.sku;
 								itm.options = resp_item.options;
 								itm.unit = resp_item.unit;
+								itm.base_price = rest_item.base_price;
 								itm.total = resp_item.total;
 							}
 

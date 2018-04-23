@@ -65,6 +65,7 @@ class Template extends EventEmitter {
 	}
 
 	delayedTpl(id, tpl_name, obj) {
+		var cart = this._cart;
 		var t = this._cart.template(tpl_name);
 		var tpl_promise = t
 			.promiseReady()
@@ -75,7 +76,10 @@ class Template extends EventEmitter {
 					container.innerHTML = html
 					container.className = "awc-placeholder loaded"
 
-					return tpl.endRender();
+					return tpl.endRender().then((r) => {
+						cart.updateUI();
+						return r;
+					});
 				} else {
 					return false;
 				}
@@ -112,6 +116,60 @@ class Template extends EventEmitter {
 	}
 }
 
+Handlebars.registerHelper("sub", function() {
+	let result = arguments[0];
+	for (var i = 1; i < arguments.length - 1; i++) {
+		result -= arguments[i];
+	}
+
+	return;
+})
+
+Handlebars.registerHelper("add", function () {
+	let result = arguments[0];
+	for (var i = 1; i < arguments.length - 1; i++) {
+		result += arguments[i];
+	}
+
+	return;
+})
+
+Handlebars.registerHelper("mul", function () {
+	let result = arguments[0];
+	for (var i = 1; i < arguments.length - 1; i++) {
+		result *= arguments[i];
+	}
+
+	return;
+})
+
+Handlebars.registerHelper("div", function () {
+	let result = arguments[0];
+	for (var i = 1; i < arguments.length - 1; i++) {
+		result /= arguments[i];
+	}
+
+	return;
+})
+
+Handlebars.registerHelper("mod", function (left, right, scope) {
+	return left % right;
+})
+
+Handlebars.registerHelper("difPercentOf", function (left, right, scope) {
+	// ex: (difPercentOf 10 100) = 90%
+	return ((right - left) * 100) / right;
+})
+
+Handlebars.registerHelper("percentOf", function (left, right, scope) {
+	// ex: (percentOf 10 100) = 10%
+	return (left * 100) / right;
+})
+
+Handlebars.registerHelper("toFixed", function (number, decimals, scope) {
+	return number.toFixed(decimals);
+})
+
 Handlebars.registerHelper("not", function(value, scope) {
 	return value?false:true;
 })
@@ -141,7 +199,13 @@ Handlebars.registerHelper("le", function(left, right, scope) {
 })
 
 Handlebars.registerHelper("or", function(left, right, scope) {
-	return left || right;
+	for (var i = 0; i < arguments.length - 1; i++) {
+
+		if ( typeof arguments[i] != "function" && arguments[i] ) {
+			return arguments[i];
+		}
+	}
+	return false;
 })
 
 Handlebars.registerHelper("and", function(left, right, scope) {

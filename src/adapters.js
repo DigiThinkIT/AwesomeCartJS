@@ -18,6 +18,7 @@ class StoreAdapter extends EventEmitter {
 		this._totals = {
 			grand_total: 0
 		}
+		this._discounts = null;
 	}
 
 	init() {
@@ -27,6 +28,7 @@ class StoreAdapter extends EventEmitter {
 	}
 
 	getTotals() { return this._totals; }
+	getDiscounts() { return this._discounts; }
 	getCurrency() { return null; }
 	getCurrencySymbol() { return null; }
 	formatCurrency(currency) { return null; }

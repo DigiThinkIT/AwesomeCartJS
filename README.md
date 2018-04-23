@@ -3,6 +3,28 @@
 A simple shopping cart front end javascript library. Awc does not have a backend, instead it relies on adapters to fetch products and place orders.
 The goal of Awc is to quickly deploy a shopping cart front end with little to no changes to your existing website code base while maintaining modern cart flexibility on any page you would like to sell a product from.
 
+### Dev and How to Build
+
+To get started install deps:
+
+```bash
+npm install
+```
+
+To build standalone distribution file
+
+```bash
+npm run dist-sa
+```
+
+The standalone bundle can be found in /dist/awc.standalone.js
+
+To build a non minified debug version:
+
+npm run build-sa
+
+The non standalone bundle is totally untested atm but requires browserify to be loaded to use.
+
 ### Getting Started
 
 On its own awcjs doesn't do much, the source includes a demo adapter to show how
