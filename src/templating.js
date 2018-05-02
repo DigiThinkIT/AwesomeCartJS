@@ -122,7 +122,7 @@ Handlebars.registerHelper("sub", function() {
 		result -= arguments[i];
 	}
 
-	return;
+	return result;
 })
 
 Handlebars.registerHelper("add", function () {
@@ -131,7 +131,7 @@ Handlebars.registerHelper("add", function () {
 		result += arguments[i];
 	}
 
-	return;
+	return result;
 })
 
 Handlebars.registerHelper("mul", function () {
@@ -140,7 +140,7 @@ Handlebars.registerHelper("mul", function () {
 		result *= arguments[i];
 	}
 
-	return;
+	return result;
 })
 
 Handlebars.registerHelper("div", function () {
@@ -149,7 +149,7 @@ Handlebars.registerHelper("div", function () {
 		result /= arguments[i];
 	}
 
-	return;
+	return result;
 })
 
 Handlebars.registerHelper("mod", function (left, right, scope) {
