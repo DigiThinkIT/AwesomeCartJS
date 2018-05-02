@@ -1,6 +1,6 @@
 {
   "name": "awesome_cart_js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A javascript shopping cart frontend.",
   "main": "src/main.js",
   "scripts": {
