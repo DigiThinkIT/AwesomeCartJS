@@ -631,8 +631,15 @@ class AwesomeCart extends EventEmitter {
 										} catch(ex) {
 											debug.error(ex);
 										}
+
+										return base._updateBulkCartData(r)
+											.then(() => r);
 									}
 
+									return r;
+								})
+								.then((r) => {
+									base._emitUpdated()
 									return r;
 								})
 								.catch((err) =>{
@@ -751,10 +758,10 @@ class AwesomeCart extends EventEmitter {
 	applyCoupon(coupon) {
 		this.coupon_code = coupon;
 		return this.storeAdapter.sessionAction("applyCoupon", [coupon])
-			.then(() => {
+			.then((r) => {
 				this._emitUpdated();
 				this.emit("coupon-applied");
-				return true;
+				return r;
 			});
 	}
 
