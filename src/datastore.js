@@ -77,16 +77,32 @@ class DataStore extends EventEmitter {
 		return _.find(this._data, filter);
 	}
 
-	update(data) {
+	update(data, emitEvents) {
+		if ( emitEvents === undefined ) {
+			emitEvents = true;
+		}
+
 		var row = _.find(this._data, { id: data.id });
 		if ( row ) {
 			_.merge(row, data);
-			this.emit("update", this, row)
+			if ( emitEvents ) {
+				this.emit("update", this, row)
+			}
 		} else {
 			this._data.push(data)
-			this.emit("insert", this, data)
+			if ( emitEvents ) {
+				this.emit("insert", this, data)
+			}
 		}
 
+		return this;
+	}
+
+	bulkUpdate(data, emitEvents) {
+		if ( emitEvents === undefined ) {
+			emitEvents = true;
+		}
+		data.forEach(d => this.update(d, emitEvents));
 		return this;
 	}
 
