@@ -177,6 +177,7 @@ class AwesomeCart extends EventEmitter {
 									qty: itm.qty,
 									id: itm.id,
 									unit: itm.unit,
+									lock_qty: itm.lock_qty?1:0,
 									base_price: itm.base_price,
 									total: itm.total
 								}
@@ -288,6 +289,7 @@ class AwesomeCart extends EventEmitter {
 					unit: item.unit,
 					base_price: item.base_price,
 					total: item.total,
+					lock_qty: item.lock_qty?1:0,
 					options: item.options,
 					product: {
 						name: item.product.name,
@@ -859,6 +861,7 @@ class AwesomeCart extends EventEmitter {
 								itm.id = resp_item.id;
 								itm.qty = resp_item.qty;
 								itm.sku = resp_item.sku;
+								itm.lock_qty = resp_item.lock_qty?1:0;
 								itm.options = resp_item.options;
 								itm.unit = resp_item.unit;
 								itm.base_price = rest_item.base_price;
