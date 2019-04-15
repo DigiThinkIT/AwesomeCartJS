@@ -49,7 +49,7 @@
     "babel-polyfill": "^6.23.0",
     "bluebird": "^3.4.7",
     "eventemitter2": "^3.0.2",
-    "handlebars": "^4.0.6",
+    "handlebars": "^4.0.14",
     "lodash": "^4.17.5",
     "query-string": "^4.3.1"
   }
