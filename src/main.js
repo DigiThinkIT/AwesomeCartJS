@@ -864,7 +864,7 @@ class AwesomeCart extends EventEmitter {
 								itm.lock_qty = resp_item.lock_qty?1:0;
 								itm.options = resp_item.options;
 								itm.unit = resp_item.unit;
-								itm.base_price = rest_item.base_price;
+								itm.base_price = resp_item.base_price;
 								itm.total = resp_item.total;
 							}
 
