@@ -52,7 +52,7 @@
     "babel-polyfill": "^6.23.0",
     "bluebird": "^3.4.7",
     "eventemitter2": "^5.0.1",
-    "handlebars": "^4.0.6",
+    "handlebars": "^4.4.5",
     "lodash": "^4.17.5",
     "query-string": "^6.8.2",
     "uglify-js": "^3.6.0"
